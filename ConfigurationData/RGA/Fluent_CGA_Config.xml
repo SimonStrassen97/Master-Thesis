@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<MachineConfig xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://tecan.com/TeMotion/Config/Model/Machine/v0">
+  <PlatformName>Fluent</PlatformName>
+  <Modules>
+    <Modul name="CGA">
+      <Axis Name="y">
+        <configName>Fluent.CGA.y</configName>
+        <functionID>1</functionID>
+        <modulID>48</modulID>
+      </Axis>
+      <Axis Name="x">
+        <configName>Fluent.CGA.x</configName>
+        <functionID>1</functionID>
+        <modulID>52</modulID>
+      </Axis>
+      <Axis Name="r">
+        <configName>Fluent.CGA.r</configName>
+        <functionID>1</functionID>
+        <modulID>50</modulID>
+      </Axis>
+      <Axis Name="zlong">
+        <configName>Fluent.CGA.zlong</configName>
+        <functionID>1</functionID>
+        <modulID>113</modulID>
+      </Axis>
+      <Axis Name="g">
+        <configName>Fluent.CGA.g</configName>
+        <functionID>1</functionID>
+        <modulID>51</modulID>
+      </Axis>
+      <Axis Name="zshort">
+        <configName>Fluent.CGA.zshort</configName>
+        <functionID>1</functionID>
+        <modulID>49</modulID>
+      </Axis>
+    </Modul>
+  </Modules>
+</MachineConfig>

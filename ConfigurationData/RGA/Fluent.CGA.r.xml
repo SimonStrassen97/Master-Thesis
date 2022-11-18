@@ -1,0 +1,184 @@
+<?xml version="1.0"?>
+<AxisParamterConfig xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Name="CGA.r" xmlns="http://tecan.com/TeMotion/Config/Model/Axis/v0">
+	<MainModule>
+		<VoltageLimits>
+			<Min12V>8</Min12V>
+			<Max12V>16</Max12V>
+			<Min24V>20</Min24V>
+			<Max24V>28</Max24V>
+		</VoltageLimits>
+		<ModulatedSpeed>
+			<ScalingFactor>100</ScalingFactor>
+			<ScalingDuration>1000</ScalingDuration>
+		</ModulatedSpeed>
+		<ADCA>
+			<Channel>0</Channel>
+			<Scale>12.5</Scale>
+		</ADCA>
+		<ADCB>
+			<Channel>1</Channel>
+			<Scale>12.5</Scale>
+		</ADCB>
+	</MainModule>
+	<MotionController>
+		<Motor name="Portescap_17H218D52P">
+			<Type>FOC</Type>
+			<PolePairs>50</PolePairs>
+		</Motor>
+		<PowerStage>Discrete</PowerStage>
+		<CurrentEncoder name="ABS_1024_MAG">
+			<Type>ABS</Type>
+			<Direction>1</Direction>
+			<Resolution>
+				<LinesPerRotation>1024</LinesPerRotation>
+			</Resolution>
+			<MonitorIndex>false</MonitorIndex>
+		</CurrentEncoder>
+		<PositionEncoder name="QEP_LIN_26880_MAG">
+			<Type>QEP1</Type>
+			<Direction>1</Direction>
+			<Resolution>
+				<LinesPerRotation>26880</LinesPerRotation>
+			</Resolution>
+			<MonitorIndex>false</MonitorIndex>
+		</PositionEncoder>
+		<MonitorEncoderError>true</MonitorEncoderError>
+		<CurrentLimits>
+			<Continuous>3.6</Continuous>
+			<Boost>10</Boost>
+			<ThermalTimeConstant>16000</ThermalTimeConstant>
+		</CurrentLimits>
+		<ContouringErrorMove>420</ContouringErrorMove>
+		<PositionMoveControl>
+			<Kp>0.4</Kp>
+			<Ki>0.003</Ki>
+			<Kd>1.5</Kd>
+			<IntReset>true</IntReset>
+		</PositionMoveControl>
+		<SpeedMoveControl>
+			<Kp>0</Kp>
+			<Ki>0</Ki>
+			<Kd>0</Kd>
+		</SpeedMoveControl>
+		<CurrentTorqueMoveControl>
+			<Kp>2.8</Kp>
+			<Ki>0.04</Ki>
+			<Kd>0</Kd>
+		</CurrentTorqueMoveControl>
+		<CurrentFluxMoveControl>
+			<Kp>0</Kp>
+			<Ki>0</Ki>
+			<Kd>0</Kd>
+		</CurrentFluxMoveControl>
+		<PositionHoldControl>
+			<Kp>0.5</Kp>
+			<Ki>0.02</Ki>
+			<Kd>4</Kd>
+			<IntLimit>0.035</IntLimit>
+		</PositionHoldControl>
+		<SpeedHoldControl>
+			<Kp>0</Kp>
+			<Ki>0</Ki>
+			<Kd>0</Kd>
+		</SpeedHoldControl>
+		<CurrentTorqueHoldControl>
+			<Kp>2.4</Kp>
+			<Ki>0.02</Ki>
+			<Kd>0</Kd>
+		</CurrentTorqueHoldControl>
+		<CurrentFluxHoldControl>
+			<Kp>0</Kp>
+			<Ki>0</Ki>
+			<Kd>0</Kd>
+		</CurrentFluxHoldControl>
+		<HoldSwitchDelay>0</HoldSwitchDelay>
+		<FeedForward>
+			<Acceleration>0.1</Acceleration>
+			<Speed>0.2</Speed>
+			<Deceleration>0.05</Deceleration>
+		</FeedForward>
+		<PhaseShiftFactor>7</PhaseShiftFactor>
+		<PositionGain>4</PositionGain>
+		<Init>
+			<SIA>
+				<Command>SIA</Command>
+				<Speed>0.0025</Speed>
+				<Current>0.17</Current>
+				<ReducedCurrent>0.1</ReducedCurrent>
+				<Direction>-1</Direction>
+				<HoldInitTime>100</HoldInitTime>
+				<SEI_Speed>0.01</SEI_Speed>
+				<SEI_Current>0.17</SEI_Current>
+				<SEI_ReducedCurrent>0.1</SEI_ReducedCurrent>
+				<SEI_Direction>1</SEI_Direction>
+			</SIA>
+		</Init>
+	</MotionController>
+	<IOModule>
+		<Brake xsi:nil="true" />
+	</IOModule>
+	<I2CModule xsi:nil="true" />
+	<Application>
+		<ConstTorqueUseCases>
+			<ConstTorqueUseCase name="SearchZero">
+				<SearchMove>
+					<Speed>700</Speed>
+					<Acceleration>1000</Acceleration>
+				</SearchMove>
+				<ReleaseMove>
+					<Speed>700</Speed>
+					<Acceleration>1000</Acceleration>
+				</ReleaseMove>
+				<ConstTorqueParameter>
+					<Direction>-1</Direction>
+					<ReleaseDistance>0</ReleaseDistance>
+					<SearchTorque>0.01</SearchTorque>
+					<ReleaseTorque>0.01</ReleaseTorque>
+				</ConstTorqueParameter>
+			</ConstTorqueUseCase>
+		</ConstTorqueUseCases>
+		<MechTransmission>360</MechTransmission>
+		<Direction>1</Direction>
+		<ResetDistance>107520</ResetDistance>
+		<Range>1</Range>
+		<MechUnit>mm</MechUnit>
+		<AccSpeedCases>
+			<AccSpeedCase name="SpecMaxLoad">
+				<Speed>600</Speed>
+				<Acceleration>900</Acceleration>
+			</AccSpeedCase>
+			<AccSpeedCase name="Extreme">
+				<Speed>1000</Speed>
+				<Acceleration>4000</Acceleration>
+			</AccSpeedCase>
+			<AccSpeedCase name="SpecStdLoad">
+				<Speed>700</Speed>
+				<Acceleration>2000</Acceleration>
+			</AccSpeedCase>
+			<AccSpeedCase name="ExtremeStdLoad">
+				<Speed>800</Speed>
+				<Acceleration>2500</Acceleration>
+			</AccSpeedCase>
+			<AccSpeedCase name="ReleaseMaxLoad">
+				<Speed>600</Speed>
+				<Acceleration>900</Acceleration>
+			</AccSpeedCase>
+			<AccSpeedCase name="Release">
+				<Speed>800</Speed>
+				<Acceleration>3000</Acceleration>
+			</AccSpeedCase>
+			<AccSpeedCase name="ExtremeMaxLoad">
+				<Speed>700</Speed>
+				<Acceleration>1150</Acceleration>
+			</AccSpeedCase>
+			<AccSpeedCase name="Spec">
+				<Speed>800</Speed>
+				<Acceleration>3000</Acceleration>
+			</AccSpeedCase>
+			<AccSpeedCase name="ReleaseStdLoad">
+				<Speed>700</Speed>
+				<Acceleration>2000</Acceleration>
+			</AccSpeedCase>
+		</AccSpeedCases>
+	</Application>
+</AxisParamterConfig>
