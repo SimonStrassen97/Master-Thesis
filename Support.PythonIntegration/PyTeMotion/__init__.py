@@ -37,6 +37,9 @@ class Axis:
         self.axisAbstraction.MoveFor(float(distance))
         pass
 
+    def GetCurrentPosition(self) -> float:
+        return self.axisAbstraction.GetCurrentPosition()
+
     def WriteLog(self) -> None:
         self.axisAbstraction.WriteLog()
         pass

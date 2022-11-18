@@ -38,7 +38,7 @@
 			<Type>QEP1</Type>
 			<Direction>-1</Direction>
 			<Resolution>
-				<LinesPerRotation>256</LinesPerRotation>
+				<IncrementsPerMM>50</IncrementsPerMM>
 			</Resolution>
 			<MonitorIndex>false</MonitorIndex>
 		</PositionEncoder>
@@ -56,21 +56,11 @@
 			<OutMaximum>0.2</OutMaximum>
 			<OutMinimum>-0.5</OutMinimum>
 		</PositionMoveControl>
-		<SpeedMoveControl>
-			<Kp>0</Kp>
-			<Ki>0</Ki>
-			<Kd>0</Kd>
-		</SpeedMoveControl>
 		<CurrentTorqueMoveControl>
 			<Kp>2</Kp>
 			<Ki>0.02</Ki>
 			<Kd>0</Kd>
 		</CurrentTorqueMoveControl>
-		<CurrentFluxMoveControl>
-			<Kp>0</Kp>
-			<Ki>0</Ki>
-			<Kd>0</Kd>
-		</CurrentFluxMoveControl>
 		<PositionHoldControl>
 			<Kp>0.75</Kp>
 			<Ki>0.01</Ki>
@@ -78,21 +68,11 @@
 			<OutMaximum>0.2</OutMaximum>
 			<OutMinimum>-0.5</OutMinimum>
 		</PositionHoldControl>
-		<SpeedHoldControl>
-			<Kp>0</Kp>
-			<Ki>0</Ki>
-			<Kd>0</Kd>
-		</SpeedHoldControl>
 		<CurrentTorqueHoldControl>
 			<Kp>2</Kp>
 			<Ki>0.05</Ki>
 			<Kd>0</Kd>
 		</CurrentTorqueHoldControl>
-		<CurrentFluxHoldControl>
-			<Kp>0</Kp>
-			<Ki>0</Ki>
-			<Kd>0</Kd>
-		</CurrentFluxHoldControl>
 		<HoldSwitchDelay>0</HoldSwitchDelay>
 		<FeedForward>
 			<Acceleration>0.8</Acceleration>
@@ -124,7 +104,7 @@
 	<IOModule>
 		<Brake>
 			<Type>Output</Type>
-			<ActiveHigh>false</ActiveHigh>
+			<ActiveHigh>true</ActiveHigh>
 			<InitValue>false</InitValue>
 			<IOPort>11</IOPort>
 			<ReleaseEvent>129</ReleaseEvent>
@@ -152,9 +132,9 @@
 			</ConstTorqueUseCase>
 		</ConstTorqueUseCases>
 		<MechTransmission>1</MechTransmission>
-		<Direction>-1</Direction>
+		<Direction>1</Direction>
 		<ResetDistance>0</ResetDistance>
-		<Range>1</Range>
+		<Range>300</Range>
 		<MechUnit>mm</MechUnit>
 		<AccSpeedCases>
 			<AccSpeedCase name="SpecMaxLoad">

@@ -42,7 +42,7 @@
       <Type>QEP1</Type>
       <Direction>-1</Direction>
       <Resolution>
-        <LinesPerRotation>256</LinesPerRotation>
+        <IncrementsPerMM>50</IncrementsPerMM>
       </Resolution>
       <MonitorIndex>false</MonitorIndex>
     </PositionEncoder>
@@ -69,31 +69,16 @@
       <Ki>0.04</Ki>
       <Kd>0</Kd>
     </CurrentTorqueMoveControl>
-    <CurrentFluxMoveControl>
-      <Kp>0</Kp>
-      <Ki>0</Ki>
-      <Kd>0</Kd>
-    </CurrentFluxMoveControl>
     <PositionHoldControl>
       <Kp>2.5</Kp>
       <Ki>0.005</Ki>
       <Kd>5</Kd>
     </PositionHoldControl>
-    <SpeedHoldControl>
-      <Kp>0</Kp>
-      <Ki>0</Ki>
-      <Kd>0</Kd>
-    </SpeedHoldControl>
     <CurrentTorqueHoldControl>
       <Kp>0.8</Kp>
       <Ki>0.02</Ki>
       <Kd>0</Kd>
     </CurrentTorqueHoldControl>
-    <CurrentFluxHoldControl>
-      <Kp>0</Kp>
-      <Ki>0</Ki>
-      <Kd>0</Kd>
-    </CurrentFluxHoldControl>
     <HoldSwitchDelay>0</HoldSwitchDelay>
     <FeedForward>
       <Acceleration>4.4</Acceleration>
@@ -144,7 +129,7 @@
     <MechTransmission>1</MechTransmission>
     <Direction>1</Direction>
     <ResetDistance>0</ResetDistance>
-    <Range>1</Range>
+    <Range>700</Range>
     <MechUnit>mm</MechUnit>
     <AccSpeedCases>
       <AccSpeedCase name="SpecMaxLoad">
