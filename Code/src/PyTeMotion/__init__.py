@@ -1,6 +1,7 @@
 import os
 import sys
-sys.path.append(os.path.realpath('..\Support.AxisWrappers\\bin\Debug'))
+sys.path.append(os.path.realpath('..\src\PyTeMotion\Support.AxisWrappers\\bin\Debug'))
+
 
 import clr
 clr.AddReference("Support.AxisWrappers")
@@ -9,9 +10,6 @@ from typing import SupportsFloat as Numeric
 
 from Support.AxisWrappers import AxisWrapper
 from Support.AxisWrappers import ConfigurationHelper
-
-
-
 
 
 
@@ -42,16 +40,4 @@ class Axis:
 
     def WriteLog(self) -> None:
         self.axisAbstraction.WriteLog()
-        pass
-
-
-if __name__ == "__main__":
-
-    CGA_y = Axis("CGA", "y",  '..\..\..\..\ConfigurationData\Fluent_CGA_Config.xml')
-
-    CGA_y.StartTeControl()
-    CGA_y.Initialize()
-
-    for x in [111.0, 222.0, 333.0, 222.0, 111.0, 123.0]:
-        CGA_y.MoveTo(x)
         pass
