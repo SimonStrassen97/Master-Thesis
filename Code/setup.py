@@ -8,11 +8,11 @@ Created on Thu Nov 24 17:21:14 2022
 from distutils.core import setup
 
 setup(
-    name="PyTeMotion",
+    name="recon_source_code",
     version="1.0",
-    description="HLP Code",
     author="Simon Strassen",
     author_email="simonst@ethz.ch",
-    packages=["PyTeMotion"],
+    packages=["PyTeMotion", "utils"],
     package_dir={"": "src"},
 )
+

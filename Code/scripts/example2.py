@@ -7,8 +7,10 @@ Created on Tue Nov 22 14:29:15 2022
 
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-import clr
+try:
+    import clr
+except ImportError:
+    pass
 
 clr.AddReference("System.Windows.Forms")
 import System.Windows.Forms as WinForms
