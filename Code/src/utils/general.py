@@ -10,16 +10,6 @@ import cv2
 import numpy as np
 
 
-from dataclasses import dataclass
-
-
-@dataclass
-class ParameterConfigs:
-    vis: bool = False
-    method: str = "ransac"
-    matcher: str = "flann"
-    feature: str = "sift"
-
 
 ########################################################################################################
 # Functions for Image formating #

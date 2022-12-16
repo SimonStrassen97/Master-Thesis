@@ -1,6 +1,0 @@
-setup.py
-src/PyTeMotion/__init__.py
-src/PyTeMotion.egg-info/PKG-INFO
-src/PyTeMotion.egg-info/SOURCES.txt
-src/PyTeMotion.egg-info/dependency_links.txt
-src/PyTeMotion.egg-info/top_level.txt

@@ -14,8 +14,52 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 from datetime import datetime
+import pyrealsense2 as rs
+import json
+
+from dataclasses import dataclass
 
 
+
+
+@dataclass
+class ConfigBase:
+
+    def verify(self):
+        pass
+
+    def to_dict(self):
+        ret = dict()
+        for item in dir(self):
+            val = getattr(self, item)
+            if item.startswith("__") or callable(val):
+                continue
+            if isinstance(val, ConfigBase):
+                ret[item] = val.to_dict()
+            else:
+                ret[item] = val
+        return ret
+    
+    
+@dataclass
+class ParameterConfigs(ConfigBase):
+    vis: bool = False
+    method: str = "ransac"
+    matcher: str = "flann"
+    feature: str = "sift"
+    
+    
+@dataclass
+class StreamConfigs(ConfigBase):
+    c_hfov: int = 848
+    c_vfov: int = 480
+    c_fps: str = 30
+    
+    d_hfov: int = 848
+    d_vfov: int = 480
+    d_fps: str = 30
+    
+   
 
 # edit JSONEncoder to convert np arrays to list
 class NumpyEncoder(json.JSONEncoder):
@@ -405,113 +449,151 @@ class PseudoStereoCamera(Camera):
          
     
     
-class StereoCamera(Camera):
-    def __init__(self):
-            super().__init__()
+class StereoCamera():
+    def __init__(self, activate_adv=True):
+        # Configure depth and color streams
+        self.pipeline = rs.pipeline()
+        
+        if activate_adv:
+            dev = self._find_device_that_supports_advanced_mode()
+            self.advnc_mode = rs.rs400_advanced_mode(dev)
+            print("Advanced mode is", "enabled" if self.advnc_mode.is_enabled() else "disabled")
     
-    
-    def calibrate(self, input_dir, checkerboard):
-        
-        size = checkerboard["size"]
-        scale = checkerboard["scale"]
-            
-        CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-        
-        objpoints = []
-        imgpointsL = []
-        imgpointsR = []
-        imgpoints = []
-        
-        objp = np.zeros((1, size[0] * size[1], 3), np.float32)
-        objp[0,:,:2] = np.mgrid[0:size[0], 0:size[1]].T.reshape(-1, 2)*scale
-        
-        
-        image_list = glob.glob(os.path.join(input_dir,"*"))
-        
-        for i, image in enumerate(image_list):
-            
-            print(f"{i+1}/{len(image_list)}")
-            
-            ref = cv2.imread(os.path.join(input_dir, image))
-            gray = cv2.cvtColor(ref,cv2.COLOR_BGR2GRAY)
-            self.img_size=gray.shape
-        
-            ret, corners = cv2.findChessboardCorners(gray, size, cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE)
-            
-            if ret == True:
-             
-               # refining pixel coordinates for given 2d points.
-               corners2 = cv2.cornerSubPix(gray, corners, (11,11),(-1,-1), CRITERIA)
-               
-               
-               objpoints.append(objp)
-               imgpoints.append(corners2)
-               if "left" in image:
-                   imgpointsL.append(corners2)
-               elif "right" in image:
-                   imgpointsR.append(corners2)
-            
+            # Loop until we successfully enable advanced mode
+            while not self.advnc_mode.is_enabled():
+                print("Trying to enable advanced mode...")
+                self.advnc_mode.toggle_advanced_mode(True)
+                # At this point the device will disconnect and re-connect.
+                print("Sleeping for 5 seconds...")
+                time.sleep(5)
+                # The 'dev' object will become invalid and we need to initialize it again
+                dev = self._find_device_that_supports_advanced_mode()
+                advnc_mode = rs.rs400_advanced_mode(dev)
+                print("Advanced mode is", "enabled" if advnc_mode.is_enabled() else "disabled")
                 
-            self.control = cv2.drawChessboardCorners(ref.copy(), size, corners2, ret)
-              
         
-        
-        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
-        w, h = gray.shape
-        mtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h),1,(w,h))
-        
-        for variable in ['ret', 'mtx', 'dist', 'rvecs', 'tvecs']:
-            self.camera_params[variable] = eval(variable)
-            
-        (_, _, _, _, _, self.rotationMatrix, self.translationVector, _, _) = cv2.stereoCalibrate(objp, imgpointsL, imgpointsR,
-        mtx, dist,
-        mtx, dist,
-        gray.shape, None, None, None, None,
-        cv2.CALIB_FIX_INTRINSIC, CRITERIA)
-        
-        self.ret = cv2.stereoCalibrate(objp, imgpointsL, imgpointsR,
-        mtx, dist,
-        mtx, dist,
-        gray.shape, None, None, None, None,
-        cv2.CALIB_FIX_INTRINSIC, CRITERIA)
-    
-        
-        
-    
-    def undistort(self, imgR, imgL):
-        
-        if not self.camera_params:
-            raise Exception("Camera params not defined yet.")
-                
-        h,  w = imgR.shape[:2]
-        new_camera_mtx, roi = cv2.getOptimalNewCameraMatrix(self.camera_params["mtx"], self.camera_params["dist"], (w,h), 1, (w,h))
-        self.camera_params["mtx"] = new_camera_mtx
-        
-        (leftRectification, rightRectification, leftProjection, rightProjection,
-         dispartityToDepthMap, leftROI, rightROI) = cv2.stereoRectify(self.camera_params["mtx"],
-                                                                     self.camera_params["dist"], 
-                                                                     self.camera_params["mtx"], 
-                                                                     self.camera_params["dist"],
-                                                                     self.img_size, 
-                                                                     self.rotationMatrix,
-                                                                     self.translationVector)
-        
-        stereoMapL_x, stereoMapL_y = cv2.initUndistortRectifyMap(self.camera_params["mtx"],
-                                                                 self.camera_params["dist"],
-                                                                 leftRectification, leftProjection,
-                                                                 self.img_size, cv2.CV_32FC1)
-        
-        stereoMapR_x, stereoMapR_y = cv2.initUndistortRectifyMap(self.camera_params["mtx"], 
-                                                                 self.camera_params["dist"], 
-                                                                 rightRectification,
-                                                                 rightProjection, 
-                                                                 self.img_size, cv2.CV_32FC1)
 
-        imgR = cv2.remap(imgR, stereoMapR_x, stereoMapR_y, cv2.INTER_LANCZOS4, cv2.BORDER_CONSTANT, 0)
-        imgL = cv2.remap(imgL, stereoMapL_x, stereoMapL_y, cv2.INTER_LANCZOS4, cv2.BORDER_CONSTANT, 0)
+    def startStreaming(self, stream_configs):
+        self.config = rs.config()
+        
+        # Get device product line for setting a supporting resolution
+        pipeline_wrapper = rs.pipeline_wrapper(self.pipeline)
+        
+        pipeline_profile = None
+        while pipeline_profile is None:
+             try:
+                 pipeline_profile = self.config.resolve(pipeline_wrapper)
+                 
+             except:
+                 print("---------------------------")
+                 print("No Stereo Cam connected...")
+                 print("---------------------------")
+                 cv2.waitKey(2000)
+                 pass
+      
+        device = pipeline_profile.get_device()
+        device_product_line = str(device.get_info(rs.camera_info.product_line))
+
+
+        self.config.enable_stream(rs.stream.depth, 
+                                  stream_configs.d_hfov, 
+                                  stream_configs.d_vfov,
+                                  rs.format.z16, 
+                                  stream_configs.d_fps
+                                  )
+        self.config.enable_stream(rs.stream.color, 
+                                  stream_configs.d_vfov, 
+                                  stream_configs.d_vfov,
+                                  rs.format.bgr8, 
+                                  stream_configs.c_fps
+                                  )
+        
+        # Start streaming
+        self.pipeline.start(self.config)
+        
+        
+
+    def getFrame(self, color=True, depth=True):
+
+        # Wait for a coherent pair of frames: depth and color
+        frames = self.pipeline.wait_for_frames()
+        
+        depth_frame = frames.get_depth_frame()
+        color_frame = frames.get_color_frame()
+       
+        # Convert images to numpy arrays
+        depth_image = np.asanyarray(depth_frame.get_data())
+        color_image = np.asanyarray(color_frame.get_data())
+       
+        # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
+        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
+       
+        depth_colormap_dim = depth_colormap.shape
+        color_colormap_dim = color_image.shape
+       
+        # If depth and color resolutions are different, resize color image to match depth image for display
+        if depth_colormap_dim != color_colormap_dim:
+            color_image = cv2.resize(color_image, dsize=(depth_colormap_dim[1], depth_colormap_dim[0]), interpolation=cv2.INTER_AREA)
+            
+        return color_image, depth_image
+
+    def _find_device_that_supports_advanced_mode(self):
+       
+      
+        ret = None
+        while ret is None:
+            ctx = rs.context()
+            devices = ctx.query_devices()
+            # print(devices)
+            try:
+                dev = devices[0]
+                ret = dev.supports(rs.camera_info.name)
     
-        return imgR, imgL
+            except:
+                print("---------------------------")
+                print("No Stereo Cam with adv mode connected...")
+                print("---------------------------")
+                cv2.waitKey(2000)
+                pass
+      
+
+        print("Found device that supports advanced mode:", dev.get_info(rs.camera_info.name))
+        return dev
+    
+
+    def loadSettings(self, path):
+        
+        if not self.advnc_mode:
+            raise ValueError("Adv. mode not activated.")
+            
+        with open(path, "r") as f:
+            json_file = json.load(f)
+            
+        if type(next(iter(json_file))) != str:
+            json_file = {k.encode('utf-8'): v.encode("utf-8") for k, v in json_file.items()}
+        # The C++ JSON parser requires double-quotes for the json object so we need
+        # to replace the single quote of the pythonic json to double-quotes
+        json_string = str(json_file).replace("'", '\"')
+        self.advnc_mode.load_json(json_string)
+        
+        
+    def saveSettings(self, path):
+        
+        if not self.advnc_mode:
+            raise ValueError("Adv. mode not activated.")
+        serialized_string = self.advnc_mode.serialize_json()
+        print("Controls as JSON: \n", serialized_string)
+        json_file = json.loads(serialized_string)
+        
+        with open(path, "w") as f:
+            f.write(json_file)
+        
+        
+        
+        
+
    
+    
 
      
 # class CameraMono(Camera):

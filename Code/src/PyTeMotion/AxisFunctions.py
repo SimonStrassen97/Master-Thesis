@@ -36,7 +36,14 @@ class Axis:
     def MoveTo(self, target: Numeric) -> None:
         self.axisAbstraction.MoveTo(float(target))
         pass
-
+    
+    def MoveTo2(self, target: Numeric, dont_start: bool) -> None:
+        self.axisAbstraction.MoveTo(float(target), dontStart=True)
+        pass
+    
+    def StartMove(self):
+        self.axisAbstraction.StartAndWaitForAll(self.axisAbstraction)
+        
     def MoveFor(self, distance: Numeric) -> None:
         self.axisAbstraction.MoveFor(float(distance))
         pass
