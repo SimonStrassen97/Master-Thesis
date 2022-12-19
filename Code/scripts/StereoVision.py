@@ -46,6 +46,7 @@ input_folder = os.path.realpath("C:/Users/SI042101/ETH/Master_Thesis/Images/Imag
 output_folder = os.path.realpath("C:/Users/SI042101/ETH/Master_Thesis/Images/Images MT/Full WT Out/")
 weights_path = "J:/GitHub/DPT/weights/dpt_hybrid-midas-501f0c75.pt"
 model_type = "dpt_hybrid"
+model_type = "dpt_hybrid_nyu"
 optimize = True
 
 
@@ -67,15 +68,15 @@ for name in os.listdir(input_folder):
     # depth = cv2.imread(os.path.join(output_folder, f"{orig[:-4]}.png"))
     rect_img = cam.undistort(img)
     
-    inv_depth = mono.run(rect_img, name, output_folder, weights_path, absolute_depth=True)
+    inv_depth = mono.run(rect_img, name, output_folder, weights_path, model_type=model_type, absolute_depth=True)
     depth = inv_depth.max()-inv_depth
     
     
-app = QtGui.QGuiApplication([])
-gl_widget = gl.GLViewWidget()
-gl_widget.show()
-gl_grid = gl.GLGridItem()
-gl_widget.addItem(gl_grid)
+# app = QtGui.QGuiApplication([])
+# gl_widget = gl.GLViewWidget()
+# gl_widget.show()
+# gl_grid = gl.GLGridItem()
+# gl_widget.addItem(gl_grid)
 
 
     
