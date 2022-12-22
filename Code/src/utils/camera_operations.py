@@ -17,47 +17,10 @@ from datetime import datetime
 import pyrealsense2 as rs
 import json
 
-from dataclasses import dataclass
+import open3d as o3d
 
 
 
-
-@dataclass
-class ConfigBase:
-
-    def verify(self):
-        pass
-
-    def to_dict(self):
-        ret = dict()
-        for item in dir(self):
-            val = getattr(self, item)
-            if item.startswith("__") or callable(val):
-                continue
-            if isinstance(val, ConfigBase):
-                ret[item] = val.to_dict()
-            else:
-                ret[item] = val
-        return ret
-    
-    
-@dataclass
-class ParameterConfigs(ConfigBase):
-    vis: bool = False
-    method: str = "ransac"
-    matcher: str = "flann"
-    feature: str = "sift"
-    
-    
-@dataclass
-class StreamConfigs(ConfigBase):
-    c_hfov: int = 848
-    c_vfov: int = 480
-    c_fps: str = 30
-    
-    d_hfov: int = 848
-    d_vfov: int = 480
-    d_fps: str = 30
     
    
 
@@ -451,8 +414,22 @@ class PseudoStereoCamera(Camera):
     
 class StereoCamera():
     def __init__(self, activate_adv=True):
-        # Configure depth and color streams
+        
+        # camera objects
         self.pipeline = rs.pipeline()
+        self.PCL = rs.pointcloud()
+        self.POINTS = rs.points()
+        # self.colorizer = rs.colorizer()
+        
+        self.intrinsics = None
+        self.pcl = None
+        self.color_img = None
+        self.depth_img = None
+        
+        # o3d objects
+        self.visualizer = o3d.visualization.Visualizer()
+        self.pcl_obj = o3d.geometry.PointCloud()
+        
         
         if activate_adv:
             dev = self._find_device_that_supports_advanced_mode()
@@ -492,7 +469,7 @@ class StereoCamera():
                  pass
       
         device = pipeline_profile.get_device()
-        device_product_line = str(device.get_info(rs.camera_info.product_line))
+        self.device_product_line = str(device.get_info(rs.camera_info.product_line))
 
 
         self.config.enable_stream(rs.stream.depth, 
@@ -509,33 +486,92 @@ class StereoCamera():
                                   )
         
         # Start streaming
-        self.pipeline.start(self.config)
+        a = self.pipeline.start(self.config)
+        
+        profile = a.get_stream(rs.stream.color) # Fetch stream profile for depth stream
+        self.intr = profile.as_video_stream_profile().get_intrinsics()
         
         
 
-    def getFrame(self, color=True, depth=True):
+    def getFrame(self, color=True, depth=True, ret=False):
 
         # Wait for a coherent pair of frames: depth and color
-        frames = self.pipeline.wait_for_frames()
+        self.frames = self.pipeline.wait_for_frames()
+        # self.colorized = self.colorizer.process(frames)
         
-        depth_frame = frames.get_depth_frame()
-        color_frame = frames.get_color_frame()
+        
+        depth_frame = self.frames.get_depth_frame()
+        color_frame = self.frames.get_color_frame()
+             
+        
+        self.pcl = self.PCL.calculate(depth_frame)
+        self.PCL.map_to(color_frame)
+         
        
         # Convert images to numpy arrays
-        depth_image = np.asanyarray(depth_frame.get_data())
-        color_image = np.asanyarray(color_frame.get_data())
+        depth_img = np.asanyarray(depth_frame.get_data())
+        color_img = np.asanyarray(color_frame.get_data())
        
         # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
-        depth_image = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
+        depth_img = cv2.applyColorMap(cv2.convertScaleAbs(depth_img, alpha=0.03), cv2.COLORMAP_JET)
        
-        depth_colormap_dim = depth_image.shape
-        color_colormap_dim = color_image.shape
+        depth_dim = depth_img.shape
+        color_dim = color_img.shape
        
         # If depth and color resolutions are different, resize color image to match depth image for display
-        if depth_colormap_dim != color_colormap_dim:
-            color_image = cv2.resize(color_image, dsize=(depth_colormap_dim[1], depth_colormap_dim[0]), interpolation=cv2.INTER_AREA)
+        if depth_dim != color_dim:
+            color_img = cv2.resize(color_img, dsize=(depth_dim[1], depth_dim[0]), interpolation=cv2.INTER_AREA)
+        
+        self.color_img = color_img
+        self.depth_img = depth_img
+        
+        if ret:
+            return color_img, depth_img
+        
+    
+    def Depth2PCL(self, img, dmap, K, scale=1):
+    # Update 
+
+        C, R = np.indices(dmap.shape)
+        fx = K[0,0]
+        fy = K[1,1]
+        cx = K[0,2]
+        cy = K[1,2]
+    
+        R = np.subtract(R, cx)
+        R = np.multiply(R, dmap)
+        R = np.divide(R, fx * scale)
+    
+        C = np.subtract(C, cy)
+        C = np.multiply(C, dmap)
+        C = np.divide(C, fy * scale)
+        
+        pts = np.column_stack((dmap.ravel() / scale, R.ravel(), -C.ravel()))
+        colors = np.column_stack((img[:,:,0].ravel(), img[:,:,1].ravel(), img[:,:,2].ravel()))
+        
+        self.pcl_obj.points = o3d.utility.Vector3dVector(pts)
+        self.pcl_obj.colors = o3d.utility.Vector3dVector(colors/255)
+        
+    
+    
+    def saveImages(self, path, counter):
+         
+        depth_name  = f"depth_frame_{counter}.png"
+        img_name = f"img_frame_{counter}.png"
+        
+        depth_folder = os.path.join(path, "depth")
+        img_folder = os.path.join(path, "img")
+        
+        if not os.path.exists(depth_folder):
+            os.makedirs(depth_folder)
+            os.makedirs(img_folder)
+        
+        depth_file = os.path.join(depth_folder, depth_name)
+        img_file = os.path.join(img_folder, img_name)
+        
+        cv2.imwrite(depth_file, self.depth_img)
+        cv2.imwrite(img_file, self.color_img)
             
-        return color_image, depth_image
 
     def _find_device_that_supports_advanced_mode(self):
        
@@ -587,13 +623,56 @@ class StereoCamera():
         
         with open(path, "w") as f:
             f.write(json_file)
+            
+    def savePCL(self, path, counter):
+        
+        pcl_name = f"pcl_frame_{counter}.ply"
+        
+        pcl_folder = os.path.join(path, "PCL")
+        
+        if not os.path.exists(pcl_folder):
+            os.makedirs(pcl_folder)
+        
+        pcl_file = os.path.join(pcl_folder, pcl_name)
         
         
+        # self.pcl.export_to_ply(pcl_file, self.color_frame)
+        ply = rs.save_to_ply(pcl_file)
+        ply.set_option(rs.save_to_ply.option_ply_mesh, True)
+        ply.set_option(rs.save_to_ply.option_ply_binary, False)
+        ply.set_option(rs.save_to_ply.option_ply_normals, True)
+        ply.set_option(rs.save_to_ply.option_ignore_color, False)
+        # self.ply = ply
+    
+        if self.frames:
+            print("Saving pcl..")
+            # Apply the processing block to the frameset which contains the depth frame and the texture
+            ply.process(self.frames)
+            print("Done")
+        else:
+            raise ValueError("No frames processed yet...")
+            
+         
+    
+    # Move to pcl_operations
+    def loadPCL(self, path):
+        
+        self.pcl_obj = o3d.io.read_point_cloud("../../test_data/fragment.ply")
+    
+    def CamToWorld(self, cam_pose):
+        
+        self.pcl_obj.transform(cam_pose)
+            
+        
+    def visualizePCL(self, coord_frame=True):
+        
+        if coord_frame:
+            origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=np.array([0., 0., 0.]))
+            
+        o3d.visualization.draw_geometries([self.pcl_obj, origin])  
         
         
 
-   
-    
 
      
 # class CameraMono(Camera):
@@ -662,8 +741,4 @@ class StereoCamera():
 #         idx = np.where(cc==max_val)
         
 #         return idx
-    
-    
-    
-    
     

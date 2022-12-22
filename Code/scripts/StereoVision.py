@@ -19,9 +19,10 @@ from mpl_toolkits import mplot3d
 # from PyTeMotion.AxisFunctions import Axis
 from utils.camera_operations import Camera, StereoCamera, PseudoStereoCamera
 from utils.general import ResizeWithAspectRatio
-from utils.point_cloud_operations import PointCloud
+import utils.dpt_monodepth as dpt
+from utils.general import StreamConfigs
 
-import monodepth as mono
+
 import open3d as o3d
 
 from pyqtgraph.Qt import QtCore, QtGui
@@ -45,19 +46,22 @@ input_folder = os.path.realpath("C:/Users/SI042101/ETH/Master_Thesis/Images/Imag
 # for monocular ml approach
 output_folder = os.path.realpath("C:/Users/SI042101/ETH/Master_Thesis/Images/Images MT/Full WT Out/")
 weights_path = "J:/GitHub/DPT/weights/dpt_hybrid-midas-501f0c75.pt"
-model_type = "dpt_hybrid"
+# model_type = "dpt_hybrid"
 model_type = "dpt_hybrid_nyu"
 optimize = True
+absolute_depth = True
 
 
 ###################################################################################################
 
-cam = Camera()
-
-if cali_data_dir:
-    cam.load_cam_params(cali_data_dir)
-else:
-    cam.calibrate(calibration_folder, CHECKERBOARD, save_data=True)
+configs = StreamConfigs
+cam = StereoCamera(activate_adv=False)
+cam.startStreaming(configs)
+cam.getFrame()
+# if cali_data_dir:
+#     cam.load_cam_params(cali_data_dir)
+# else:
+#     cam.calibrate(calibration_folder, CHECKERBOARD, save_data=True)
     
 
 for name in os.listdir(input_folder):
@@ -66,10 +70,12 @@ for name in os.listdir(input_folder):
         continue
     img = cv2.imread(os.path.join(input_folder, name))
     # depth = cv2.imread(os.path.join(output_folder, f"{orig[:-4]}.png"))
-    rect_img = cam.undistort(img)
+    # rect_img = cam.undistort(img)
     
-    inv_depth = mono.run(rect_img, name, output_folder, weights_path, model_type=model_type, absolute_depth=True)
-    depth = inv_depth.max()-inv_depth
+    inv_depth = dpt.run(img, name, output_folder, weights_path, model_type=model_type, absolute_depth=absolute_depth)
+    # depth = inv_depth.max()+inv_depth.min()-inv_depth
+    
+    plt.imshow(inv_depth)
     
     
 # app = QtGui.QGuiApplication([])
@@ -80,9 +86,15 @@ for name in os.listdir(input_folder):
 
 
     
-pcl = PointCloud()
-pcl.registrationFast(rect_img, depth, cam.camera_params["mtx"])
-pcl.visualize()
+
+# cam.Depth2PCL(img, inv_depth, cam.camera_params["mtx"])
+# T = np.eye(4)
+# T[:3, :3] = pcl.pcl.get_rotation_matrix_from_xyz((np.pi, 0, np.pi/3*2))
+# T[0, 3] = 5000
+# T[1, 3] = 0
+# T[2, 3] = 5000
+# pcl.CamToWorld(-T)
+cam.visualizePCL()
 
                             
     

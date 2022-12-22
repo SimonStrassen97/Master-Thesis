@@ -37,10 +37,6 @@ class Axis:
         self.axisAbstraction.MoveTo(float(target))
         pass
     
-    def MoveTo2(self, target: Numeric, dont_start: bool) -> None:
-        self.axisAbstraction.MoveTo(float(target), dontStart=True)
-        pass
-    
     def StartMove(self):
         self.axisAbstraction.StartAndWaitForAll(self.axisAbstraction)
         
@@ -51,6 +47,6 @@ class Axis:
     def GetCurrentPosition(self) -> float:
         return self.axisAbstraction.GetCurrentPosition()
 
-    def WriteLog(self) -> None:
-        self.axisAbstraction.WriteLog()
-        pass
+    # def WriteLog(self) -> None:
+    #     self.axisAbstraction.WriteLog()
+    #     pass

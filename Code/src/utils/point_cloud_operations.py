@@ -15,33 +15,6 @@ class PointCloud():
         self.vis = o3d.visualization.Visualizer()
         self.pcl = o3d.geometry.PointCloud()
         
-        
-    def registration(self, img, dmap, K, incr=25):
-        
-        rows, cols = dmap.shape
-        fx = K[0,0]
-        fy = K[1,1]
-        cx = K[0,2]
-        cy = K[1,2]
-        pts = np.zeros((3,rows*cols))
-        colors = np.zeros((3,rows*cols))
-        scale = 0.75
-        i=0
-        
-        for row in range(0,rows,incr):
-            for col in range(0,cols,incr):
-                
-                
-                z = dmap[row,col] /scale
-                x = (col - cy) * z / fy/scale
-                y = (row - cx) * z / fx/scale
-                pts[:,i] = np.array([x,y,z])
-                colors[:,i] = img[row,col]
-                i += 1
-            
-        self.pcl.points = o3d.utility.Vector3dVector(pts.T)
-        self.pcl.colors = o3d.utility.Vector3dVector(colors.T/255)
-        
     def registrationFast(self, img, dmap, K, scale=1):
     #bacically this is a vectorized version of depthToPointCloudPos()
         C, R = np.indices(dmap.shape)
@@ -63,7 +36,11 @@ class PointCloud():
         
         self.pcl.points = o3d.utility.Vector3dVector(pts)
         self.pcl.colors = o3d.utility.Vector3dVector(colors/255)
-    
+        
+        
+    def CamToWorld(self, cam_pose):
+        
+        self.pcl.transform(cam_pose)
             
         
     def visualize(self, coord_frame=True):

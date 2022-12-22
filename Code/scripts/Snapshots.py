@@ -99,7 +99,7 @@ def createSnapshots(path, every_x_sec):
     return output_folder
 
 def main():
-    video = "C:/Users\Simon_Strassen\Documents\ETH_MSc\MT\Images\IMG_2418.MOV"
+    video = "C:/Users\SI042101\ETH\Master_Thesis\Images\Images MT\Video2\IMG_2418.MOV"
     out = createSnapshots(video, every_x_sec=.5)
 
 
