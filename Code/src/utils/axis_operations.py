@@ -27,7 +27,7 @@ class AxisMover():
         self.data = []
         
         # Axis state
-        self.move_counter = 0
+        self.move_counter = -1
         
         self._updatePos()
 
@@ -75,11 +75,11 @@ class AxisMover():
         self.CGA_r.MoveFor(r)
    
     
-    def _calcTotalDist(self, cps):
+    def _calcTotalDist(self):
         
         total_dist = 0
         prev_cp = None
-        for i, cp in enumerate(cps[:,0:3]):
+        for i, cp in enumerate(self.checkpoints[:,0:3]):
             if i!=0:
                 total_dist += np.linalg.norm(cp-prev_cp)
             prev_cp = cp
@@ -88,9 +88,8 @@ class AxisMover():
             
         
         
-    def evalCPs(self, checkpoints):
+    def evalCPs(self):
         
-        self.checkpoints=checkpoints
         
         n_imgs = self.configs.n_images
         
@@ -103,7 +102,7 @@ class AxisMover():
             axis[axis>MAX_VALUES[i]] = MAX_VALUES[i]
             
         
-        total_dist = self._calcTotalDist(checkpoints)
+        total_dist = self._calcTotalDist()
         
         self.step_size= round(total_dist/n_imgs)
         
@@ -118,10 +117,11 @@ class AxisMover():
     def MovePlanner(self, checkpoints, ret=False):
         
         done = False
+        self.checkpoints=checkpoints
         
-        if self.move_counter==0:
+        if self.move_counter==-1:
             self.MoveTo(checkpoints[0])
-            self.evalCPs(checkpoints)
+            self.evalCPs()
             self._updatePos()
           
         
@@ -140,6 +140,7 @@ class AxisMover():
             step = direction * self.step_size
             step = np.append(step, 0)
             target_pos = self.current_pos + step
+            target_pos[3] = next_cp[3]
         
         # move
         self.MoveTo(target_pos)
@@ -147,7 +148,7 @@ class AxisMover():
         # update state
         self.move_counter += 1
         self._updatePos()
-        error = target_pos[:3]-self.current_pos[:3]
+        error = target_pos-self.current_pos
         
         
         # add to data

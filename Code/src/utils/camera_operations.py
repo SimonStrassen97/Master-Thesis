@@ -419,17 +419,13 @@ class StereoCamera():
         self.pipeline = rs.pipeline()
         self.PCL = rs.pointcloud()
         self.POINTS = rs.points()
-        # self.colorizer = rs.colorizer()
         
         self.intrinsics = None
         self.pcl = None
         self.color_img = None
         self.depth_img = None
         
-        # o3d objects
-        self.visualizer = o3d.visualization.Visualizer()
-        self.pcl_obj = o3d.geometry.PointCloud()
-        
+                
         
         if activate_adv:
             dev = self._find_device_that_supports_advanced_mode()
@@ -527,37 +523,11 @@ class StereoCamera():
         
         if ret:
             return color_img, depth_img
-        
-    
-    def Depth2PCL(self, img, dmap, K, scale=1):
-    # Update 
-
-        C, R = np.indices(dmap.shape)
-        fx = K[0,0]
-        fy = K[1,1]
-        cx = K[0,2]
-        cy = K[1,2]
-    
-        R = np.subtract(R, cx)
-        R = np.multiply(R, dmap)
-        R = np.divide(R, fx * scale)
-    
-        C = np.subtract(C, cy)
-        C = np.multiply(C, dmap)
-        C = np.divide(C, fy * scale)
-        
-        pts = np.column_stack((dmap.ravel() / scale, R.ravel(), -C.ravel()))
-        colors = np.column_stack((img[:,:,0].ravel(), img[:,:,1].ravel(), img[:,:,2].ravel()))
-        
-        self.pcl_obj.points = o3d.utility.Vector3dVector(pts)
-        self.pcl_obj.colors = o3d.utility.Vector3dVector(colors/255)
-        
-    
-    
+           
     def saveImages(self, path, counter):
          
-        depth_name  = f"depth_frame_{counter}.png"
-        img_name = f"img_frame_{counter}.png"
+        depth_name  = f"{str(counter).zfill(4)}_depth_frame.png"
+        img_name = f"{str(counter).zfill(4)}_img_frame.png"
         
         depth_folder = os.path.join(path, "depth")
         img_folder = os.path.join(path, "img")
@@ -626,7 +596,7 @@ class StereoCamera():
             
     def savePCL(self, path, counter):
         
-        pcl_name = f"pcl_frame_{counter}.ply"
+        pcl_name = f"{str(counter).zfill(4)}_pcl.ply"
         
         pcl_folder = os.path.join(path, "PCL")
         
@@ -652,25 +622,7 @@ class StereoCamera():
         else:
             raise ValueError("No frames processed yet...")
             
-         
-    
-    # Move to pcl_operations
-    def loadPCL(self, path):
-        
-        self.pcl_obj = o3d.io.read_point_cloud("../../test_data/fragment.ply")
-    
-    def CamToWorld(self, cam_pose):
-        
-        self.pcl_obj.transform(cam_pose)
-            
-        
-    def visualizePCL(self, coord_frame=True):
-        
-        if coord_frame:
-            origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=np.array([0., 0., 0.]))
-            
-        o3d.visualization.draw_geometries([self.pcl_obj, origin])  
-        
+               
         
 
 

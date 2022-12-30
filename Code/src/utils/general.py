@@ -55,15 +55,57 @@ class StreamConfigs(ConfigBase):
     
 @dataclass
 class AxisConfigs(ConfigBase):
-       x_max: float = 650
-       y_max: float = 475
-       z_max: float = 250
-       r_max: float = 360
-       
-       n_images: int = 50
-       # output_dir: str = "C:\\Users\SI042101\ETH\Master_Thesis\PyData"
+    x_max: float = 650
+    y_max: float = 475
+    z_max: float = 250
+    r_max: float = 360
     
+    n_images: int = 50
+    # output_dir: str = "C:\\Users\SI042101\ETH\Master_Thesis\PyData"
+    
+@dataclass
+class PCLConfigs(ConfigBase):
+    
+    voxel_size: float = 0.05
+    
+    # m
+    depth_thresh: float = 1
+    
+    # CleanUp
+    # m
+    border_x: tuple = (-0.1, 2)
+    border_y: tuple = (-0.1, 0.7)
+    border_z: tuple = (0.05, 0.5)
+    
+    hp_radius: float = 200
+    
+    # vis
+    vis: bool = True
+    coord_frame: bool = True
+    coord_scale: float = 1
+    outliers: bool = True
+    color: str = None
+    
+    n_images: int = 0
+    
+    
+    
+    
+    
+class CameraOffset(ConfigBase):
+    # Offset parameters between Camera and RGA coordinates in Arm coordinates with corrected z7
 
+    # mm
+    x: float = 80
+    y: float = 25
+    z: float = 0
+    
+    # deg
+    r_x: float = 3
+    r_y: float = 52
+    r_z: float = -7
+    
+    
 
 def detectBlurryImgs(path, thresh=30, delete=True):
     imgs = os.listdir(path)
