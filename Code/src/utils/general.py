@@ -77,7 +77,11 @@ class PCLConfigs(ConfigBase):
     border_y: tuple = (-0.1, 0.7)
     border_z: tuple = (0.05, 0.5)
     
-    hp_radius: float = 200
+    hp_radius: float = 125
+    
+    # mesh
+    recon_method: str = "poisson"
+    
     
     # vis
     vis: bool = True

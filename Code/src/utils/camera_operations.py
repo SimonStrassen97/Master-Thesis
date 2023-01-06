@@ -16,6 +16,7 @@ import time
 from datetime import datetime
 import pyrealsense2 as rs
 import json
+import pickle
 
 import open3d as o3d
 
@@ -411,7 +412,6 @@ class PseudoStereoCamera(Camera):
             
          
     
-    
 class StereoCamera():
     def __init__(self, activate_adv=True):
         
@@ -420,7 +420,7 @@ class StereoCamera():
         self.PCL = rs.pointcloud()
         self.POINTS = rs.points()
         
-        self.intrinsics = None
+        self.intrinsics = {}
         self.pcl = None
         self.color_img = None
         self.depth_img = None
@@ -444,6 +444,21 @@ class StereoCamera():
                 advnc_mode = rs.rs400_advanced_mode(dev)
                 print("Advanced mode is", "enabled" if advnc_mode.is_enabled() else "disabled")
                 
+    def _getIntrinsics(self):
+        
+        c_profile = self.stream.get_stream(rs.stream.color) 
+        d_profile = self.stream.get_stream(rs.stream.depth) 
+        
+        
+        c = c_profile.as_video_stream_profile().get_intrinsics()
+        d = d_profile.as_video_stream_profile().get_intrinsics()
+        
+        cc = {"width":c.width, "height":c.height, "cx":c.ppx, "cy":c.ppy, "fx":c.fx, "fy":c.fy, "dist":c.coeffs}
+        dd = {"width":d.width, "height":d.height, "cx":d.ppx, "cy":d.ppy, "fx":d.fx, "fy":d.fy, "dist":d.coeffs}
+        
+        self.intrinsics["color"] = cc
+        self.intrinsics["depth"] = dd
+
         
 
     def startStreaming(self, stream_configs):
@@ -464,10 +479,7 @@ class StereoCamera():
                  cv2.waitKey(2000)
                  pass
       
-        device = pipeline_profile.get_device()
-        self.device_product_line = str(device.get_info(rs.camera_info.product_line))
-
-
+        
         self.config.enable_stream(rs.stream.depth, 
                                   stream_configs.d_hfov, 
                                   stream_configs.d_vfov,
@@ -482,13 +494,16 @@ class StereoCamera():
                                   )
         
         # Start streaming
-        a = self.pipeline.start(self.config)
+        self.stream = self.pipeline.start(self.config)
         
-        profile = a.get_stream(rs.stream.color) # Fetch stream profile for depth stream
-        self.intr = profile.as_video_stream_profile().get_intrinsics()
+        self._getIntrinsics()
+        self.saveIntrinsics()        
         
         
-
+    def stopStreaming(self):
+        
+        self.pipeline.stop()
+        
     def getFrame(self, color=True, depth=True, ret=False):
 
         # Wait for a coherent pair of frames: depth and color
@@ -566,6 +581,23 @@ class StereoCamera():
         print("Found device that supports advanced mode:", dev.get_info(rs.camera_info.name))
         return dev
     
+    def getIntrinsicMatrix(self):
+        
+        c = self.intrinsics.get("color")
+        d = self.intrinsics.get("depth")
+        
+        K_c = np.array([[c.get("fx"), 0, c.get("cx")],
+                             [0 , c.get("fy"), c.get("cy")],
+                             [0 , 0 , 1]
+                             ])
+        
+        K_d = np.array([[d.get("fx"), 0, d.get("cx")],
+                             [0 , d.get("fy"), d.get("cy")],
+                             [0 , 0 , 1]
+                             ])
+       
+        return K_c, K_d
+        
 
     def loadSettings(self, path):
         
@@ -593,6 +625,28 @@ class StereoCamera():
         
         with open(path, "w") as f:
             f.write(json_file)
+    
+    def saveIntrinsics(self, path=None):
+        
+        if not self.intrinsics:
+            raise ValueError("Nothing to be saved...")
+        
+        if not path:
+            path = "."
+            
+        file = os.path.join(path, "intrinsics.pkl")
+        
+        with open(file, "wb") as f:
+            pickle.dump(self.intrinsics, f)  
+    
+    def loadIntrinsics(self, file=None):
+        
+        if not file:
+            file = "./intrinsics.pkl"
+            
+        with open(file, "rb") as f:
+            self.intrinsics = pickle.load(f)
+        
             
     def savePCL(self, path, counter):
         
@@ -622,9 +676,6 @@ class StereoCamera():
         else:
             raise ValueError("No frames processed yet...")
             
-               
-        
-
 
      
 # class CameraMono(Camera):

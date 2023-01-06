@@ -25,7 +25,8 @@ class PointCloud():
         
         self.cam_offset = cam_offset
         self.configs = pcl_configs 
-        self.idx = None
+        self.pose_data = None
+        self.idx_list = []
         
         self.outliers = []
         self.inliers = []
@@ -36,24 +37,19 @@ class PointCloud():
         
     def ProcessPCL(self):
         
-           
-        self.loadPoseData(self.path)
-        
-        pcl_folder = os.path.join(self.path, "PCL")
-        files = os.listdir(pcl_folder)
-        
-        if self.configs.n_images:
-            every_x = int(len(files)/self.configs.n_images)
-            start = int(every_x/2)
-            files = files[start::every_x]  
+        if not self.pose_data:
+            self.loadPoseData(self.path)
             
+        if not self.pcls_:
+            self.loadPCL(self.path)
+      
         print("---------------------")
-        for i,file in enumerate(files):
-            print(f"{i+1}/{len(files)}")
-            path = os.path.join(pcl_folder, file)
-            self.loadPCL(path)
-            self.pcls_.append(self.pcl_)
+        for i,pcl in enumerate(self.pcls_):
+            print(f"{i+1}/{len(self.pcls_)}")
             
+            self.idx = self.idx_list[i]
+            
+            self.pcl_ = pcl
             self.CamToArm()
             self.CleanUpPCL()
             self.pcls.append(self.pcl)
@@ -83,7 +79,7 @@ class PointCloud():
         # align cam coordinates with RGA coordinates
         # pitch yaw roll defined as in target coordinates/Arm coordinates
         
-        
+    
         # view direction is z coordinate in camera frame
         self.view_dir = [0,0,1]
 
@@ -216,20 +212,31 @@ class PointCloud():
 
     def loadPCL(self, path):
         
-        pcl = o3d.io.read_point_cloud(path)
-        self.pcl_ = pcl.voxel_down_sample(voxel_size=self.configs.voxel_size)
+        pcl_folder = os.path.join(self.path, "PCL")
+        files = os.listdir(pcl_folder)
         
-        self._PCLToCam()
+        if self.configs.n_images:
+            every_x = int(len(files)/self.configs.n_images)
+            start = int(every_x/2)
+            files = files[start::every_x]  
         
-        if self.configs.depth_thresh:
-            points = np.array(self.pcl_.points)
+        for file in files:
+            path = os.path.join(pcl_folder, file)
+            pcl = o3d.io.read_point_cloud(path)
+            self.pcl_ = pcl.voxel_down_sample(voxel_size=self.configs.voxel_size)
             
-            condition = points[:,2] < self.configs.depth_thresh
-            ind = np.where(condition)[0]
-            self.pcl_ = self.pcl_.select_by_index(ind)
+            self._PCLToCam()
             
-            
-        self.idx = int(os.path.basename(path).split("_")[0])        
+            if self.configs.depth_thresh:
+                points = np.array(self.pcl_.points)
+                
+                condition = points[:,2] < self.configs.depth_thresh
+                ind = np.where(condition)[0]
+                self.pcl_ = self.pcl_.select_by_index(ind)
+                
+                
+            self.idx_list.append(int(os.path.basename(path).split("_")[0]))  
+            self.pcls_.append(self.pcl_)
     
 
     def visualize(self, pcl_in, coord_frame=True, coord_scale=1, outliers=True, color=None):
@@ -290,7 +297,7 @@ class PointCloud():
     #bacically this is a vectorized version of depthToPointCloudPos()
     
         
-        C, R = np.indices(dmap.shape)
+        R, C = np.indices(dmap.shape)
         fx = K[0,0]
         fy = K[1,1]
         cy = K[0,2]
@@ -308,11 +315,6 @@ class PointCloud():
         pts = np.column_stack((dmap.ravel()/scale , R.ravel(), -C.ravel()))
 
         colors = np.column_stack((img[:,:,0].ravel(), img[:,:,1].ravel(), img[:,:,2].ravel()))
-        
-        
-        pcl_ = o3d.geometry.PointCloud()
-        pcl_.points = o3d.utility.Vector3dVector(pts)
-        pcl_.colors = o3d.utility.Vector3dVector(colors/255)
         
         self.pcl_.points = o3d.utility.Vector3dVector(pts)
         self.pcl_.colors = o3d.utility.Vector3dVector(colors/255)
