@@ -10,18 +10,22 @@ import copy
 import numpy as np
 import pandas as pd
 import open3d as o3d
+import cv2
 
 from scipy.spatial.transform import Rotation as Rot
 
 
 
 class PointCloud():
-    def __init__(self, pcl_configs, cam_offset, input_path):
+    def __init__(self, pcl_configs, cam_offset):
         # self.vis = o3d.visualization.Visualizer()
         self.pcl = o3d.geometry.PointCloud()
         self.pcl_ = o3d.geometry.PointCloud()
         self.pcls = []
         self.pcls_ = []
+        
+        self.imgs = []
+        self.depths = []
         
         self.cam_offset = cam_offset
         self.configs = pcl_configs 
@@ -30,28 +34,20 @@ class PointCloud():
         
         self.outliers = []
         self.inliers = []
-        
-        self.path = input_path
     
         
         
     def ProcessPCL(self):
-        
-        if not self.pose_data:
-            self.loadPoseData(self.path)
-            
-        if not self.pcls_:
-            self.loadPCL(self.path)
-      
+          
         print("---------------------")
         for i,pcl in enumerate(self.pcls_):
             print(f"{i+1}/{len(self.pcls_)}")
             
             self.idx = self.idx_list[i]
+            self.pcl = copy.deepcopy(pcl)
             
-            self.pcl_ = pcl
             self.CamToArm()
-            self.CleanUpPCL()
+            # self.CleanUpPCL()
             self.pcls.append(self.pcl)
             
         if self.configs.vis:
@@ -60,6 +56,7 @@ class PointCloud():
                            coord_scale=self.configs.coord_scale,
                            outliers=self.configs.outliers,
                            color=self.configs.color)
+            
                    
         
     def CamToWorld(self):
@@ -83,7 +80,6 @@ class PointCloud():
         # view direction is z coordinate in camera frame
         self.view_dir = [0,0,1]
 
-        self.pcl = copy.deepcopy(self.pcl_)
        
         # rotation to arm coordinates
         pitch =  -(self.cam_offset.r_y + 90)
@@ -212,7 +208,9 @@ class PointCloud():
 
     def loadPCL(self, path):
         
-        pcl_folder = os.path.join(self.path, "PCL")
+        self.loadPoseData(path)
+        
+        pcl_folder = os.path.join(path, "PCL")
         files = os.listdir(pcl_folder)
         
         if self.configs.n_images:
@@ -221,23 +219,103 @@ class PointCloud():
             files = files[start::every_x]  
         
         for file in files:
-            path = os.path.join(pcl_folder, file)
-            pcl = o3d.io.read_point_cloud(path)
+            fpath = os.path.join(pcl_folder, file)
+            pcl = o3d.io.read_point_cloud(fpath)
             self.pcl_ = pcl.voxel_down_sample(voxel_size=self.configs.voxel_size)
             
             self._PCLToCam()
+            self._limitDepth()
             
-            if self.configs.depth_thresh:
-                points = np.array(self.pcl_.points)
                 
-                condition = points[:,2] < self.configs.depth_thresh
-                ind = np.where(condition)[0]
-                self.pcl_ = self.pcl_.select_by_index(ind)
-                
-                
-            self.idx_list.append(int(os.path.basename(path).split("_")[0]))  
+            self.idx_list.append(int(os.path.basename(fpath).split("_")[0]))  
             self.pcls_.append(self.pcl_)
+            
     
+    def loadPCLfromDepth(self, path, K, depth_scale):
+        
+        self.loadPoseData(path)
+        
+        depth_folder = os.path.join(path, "depth")
+        dfiles = os.listdir(depth_folder)
+        
+        
+        img_folder = os.path.join(path, "img")
+        ifiles = os.listdir(img_folder)
+        
+        dpt_folder = os.path.join(path, "dpt_depth")
+        dptfiles = os.listdir(dpt_folder)
+        dptfiles = [d for d in dptfiles if d.endswith(".png")]
+        
+        if self.configs.n_images:
+            every_x = int(len(dptfiles)/self.configs.n_images)
+            start = int(every_x/2)
+            dptfiles = dptfiles[start::every_x] 
+            ifiles = ifiles[start::every_x]
+            
+            
+        for dptfile, dfile, ifile in zip(dptfiles, dfiles, ifiles):
+            dptpath = os.path.join(dpt_folder, dptfile)
+            dpath = os.path.join(depth_folder, dfile)
+            ipath = os.path.join(img_folder, ifile)
+            
+            dpt = cv2.imread(dptpath,0)
+            depth = cv2.imread(dpath,0)
+            img = cv2.imread(ipath)
+            
+            
+            
+            pcl_ = self.pcl_from_depth(img, depth, K)
+            self._limitDepth()
+            
+            
+            self.idx_list.append(int(os.path.basename(dptpath).split("_")[0]))  
+            self.pcls_.append(pcl_)
+            self.imgs.append(img)
+            self.depths.append(depth)
+            
+        
+        
+        
+    
+    def _limitDepth(self):
+        
+        if self.configs.depth_thresh:
+            points = np.array(self.pcl_.points)
+            
+            condition = points[:,2] < self.configs.depth_thresh
+            ind = np.where(condition)[0]
+            self.pcl_ = self.pcl_.select_by_index(ind)
+            
+        
+        
+    def pcl_from_depth(self, img, dmap, K, scale=1, depth_scale=1):
+    #bacically this is a vectorized version of depthToPointCloudPos()
+    
+        
+        R, C = np.indices(dmap.shape)
+        fx = K[0,0]
+        fy = K[1,1]
+        cy = K[0,2]
+        cx = K[1,2]
+    
+        R = np.subtract(R, cx)
+        R = np.multiply(R, dmap)
+        R = np.divide(R, fx * scale)
+    
+        C = np.subtract(C, cy)
+        C = np.multiply(C, dmap)
+        C = np.divide(C, fy * scale)
+        
+        # pts = np.column_stack((dmap.ravel()/scale, R.ravel(), -C.ravel()))
+        pts = np.column_stack((C.ravel(), R.ravel(), dmap.ravel()/scale ))
+
+        colors = np.column_stack((img[:,:,0].ravel(), img[:,:,1].ravel(), img[:,:,2].ravel()))
+        
+        self.pcl_.points = o3d.utility.Vector3dVector(pts)
+        self.pcl_.colors = o3d.utility.Vector3dVector(colors/255)
+        
+        return self.pcl_
+        
 
     def visualize(self, pcl_in, coord_frame=True, coord_scale=1, outliers=True, color=None):
         
@@ -260,7 +338,6 @@ class PointCloud():
             if color_:
                 pcl.paint_uniform_color(color_)
         
-        print(pcl)
         vis_list.append(pcl)
         
         if coord_frame:
@@ -291,33 +368,6 @@ class PointCloud():
         
         return color
             
-        
-        
-    def pcl_from_depth(self, img, dmap, K, scale=1, depth_scale=1):
-    #bacically this is a vectorized version of depthToPointCloudPos()
-    
-        
-        R, C = np.indices(dmap.shape)
-        fx = K[0,0]
-        fy = K[1,1]
-        cy = K[0,2]
-        cx = K[1,2]
-    
-        R = np.subtract(R, cx)
-        R = np.multiply(R, dmap)
-        R = np.divide(R, fx * scale)
-    
-        C = np.subtract(C, cy)
-        C = np.multiply(C, dmap)
-        C = np.divide(C, fy * scale)
-        
-        # pts = np.column_stack((dmap.ravel()/scale, R.ravel(), -C.ravel()))
-        pts = np.column_stack((dmap.ravel()/scale , R.ravel(), -C.ravel()))
-
-        colors = np.column_stack((img[:,:,0].ravel(), img[:,:,1].ravel(), img[:,:,2].ravel()))
-        
-        self.pcl_.points = o3d.utility.Vector3dVector(pts)
-        self.pcl_.colors = o3d.utility.Vector3dVector(colors/255)
         
     
 

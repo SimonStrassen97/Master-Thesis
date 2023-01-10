@@ -14,6 +14,7 @@ import open3d as o3d
 import copy
 import cv2
 import matplotlib.pyplot as plt
+import scipy.optimize
 
 from utils.general import CameraOffset, PCLConfigs, StreamConfigs
 from utils.point_cloud_operations2 import PointCloud
@@ -22,6 +23,7 @@ import utils.dpt_monodepth as dpt
 
 
 
+# from pcls
 
 path = "C:/Users\SI042101\ETH\Master_Thesis\Data/PyData/20221221_155120"
 
@@ -39,8 +41,8 @@ pcl_configs = PCLConfigs(voxel_size=0.005,
                           )
 
 
-pcl = PointCloud(pcl_configs, cam_offset, path)
-
+pcl = PointCloud(pcl_configs, cam_offset)
+pcl.loadPCL(path)
 pcl.ProcessPCL()
 
 
@@ -57,44 +59,36 @@ o3d.visualization.draw_geometries([pcl.mesh])
 #######################################################################################################
 
 
+# from images
 
 
 input_folder = os.path.join(path, "img")
 output_folder = os.path.join(path, "dpt_depth")
-
 weights_path = "J:/GitHub/DPT/weights/dpt_hybrid-midas-501f0c75.pt"
-# model_type = "dpt_hybrid"
-model_type = "dpt_hybrid_nyu"
-optimize = True
-absolute_depth = False
 
 
 
-
-for name in os.listdir(input_folder):
-    
-    img = cv2.imread(os.path.join(input_folder, name))
-    # depth = cv2.imread(os.path.join(output_folder, f"{orig[:-4]}.png"))
-    # rect_img = cam.undistort(img)
-    
-    inv_depth = dpt.run(img, name, output_folder, weights_path, model_type=model_type, absolute_depth=absolute_depth)
-    
-    
-    
-    
 # Cam init
 stream_configs = StreamConfigs(c_hfov=848)
 stereo_cam = StereoCamera(activate_adv=False)
 stereo_cam.loadIntrinsics()
 
+# stereo_cam.run_dpt(input_folder, output_folder, weights_path)
+
 K_c, K_d = stereo_cam.getIntrinsicMatrix()
+
+depth_scale = stereo_cam.intrinsics.get("depth").get("depth_scale")
+
+
+
+
 
 
 cam_offset = CameraOffset()
 
 pcl_configs = PCLConfigs(voxel_size=0.02,
                           depth_thresh=1,
-                          vis=True,
+                          vis=False,
                           # color="gray",
                           n_images=10,
                           outliers=True,
@@ -103,19 +97,59 @@ pcl_configs = PCLConfigs(voxel_size=0.02,
                           )
 
 
-pcl = PointCloud(pcl_configs, cam_offset, path)
+pcl = PointCloud(pcl_configs, cam_offset)
+
+pcl.loadPCLfromDepth("C:/Users\SI042101\ETH\Master_Thesis\Data\PyData/20221221_155120", K_c, depth_scale)
+pcl.ProcessPCL()
+
+pcl.visualize(pcl.pcls, coord_scale=100)
+
+for p in pcl.pcls_:
+    pcl.visualize(p, coord_scale=100)
+    
+    
+    
+    
+    
+    
+stereo_cam.startStreaming(stream_configs)
+stereo_cam.getFrame()
+
+stereo_cam.saveImages(".", 0)
+stereo_cam.run_dpt("./img", ".", weights_path)
+stereo_cam.stopStreaming()
 
 
-img = cv2.imread(os.path.join(input_folder,"0000_img.png"))
-depth = cv2.imread(os.path.join(output_folder,"0000_img.png"),0)
+dpt = cv2.imread("./dpt/0000_dpt.png",-1)
+depth =  cv2.imread("./depth/0000_depth.png",-1)
+img = cv2.imread("./img/0000_img.png",-1)
+
+true_depth = depth*depth_scale
 
 
-pcl.pcl_from_depth(img, depth, K_c, scale=100)
-pcl._PCLToCam()
+def fun(x):
+    f = 1/dpt.size * np.sum((dpt[depth>0]/x - true_depth[depth>0])**2)
+    return f
 
-pcl.visualize(pcl.pcl_)
+ret = scipy.optimize.minimize(fun, 1)
+
+dmap = dpt/ret.x
+
+# dmap *= depth_scale
+
+pcl.pcl_from_depth(img, dmap, K_c)
+pcl.visualize(pcl.pcl_, coord_scale=0.2)
+
+p = pcl.pcl_
+p.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=2))
+
+o3d.visualization.draw_geometries([p])
 
 
+fig, ax = plt.subplots(1,2)
+
+ax[0].imshow(depth)
+ax[1].imshow(dpt)
 
 
 ### code for additional clean up if needed

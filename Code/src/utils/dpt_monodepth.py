@@ -162,7 +162,7 @@ def run(img, img_name, output_path, model_path, model_type="dpt_hybrid", absolut
             prediction *= 1000.0
 
     filename = os.path.join(
-        output_path, img_name[:-4])
+        output_path, img_name[:-7]+"dpt")
     
     prediction = util.io.write_depth(filename, prediction, bits=2,absolute_depth=absolute_depth)
     
