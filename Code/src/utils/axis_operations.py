@@ -30,7 +30,10 @@ class AxisMover():
         self.move_counter = -1
         
         self._updatePos()
-
+        
+        
+    def calibration(self, ):
+        pass
     
     
     def _updatePos(self, update=False):
@@ -117,12 +120,13 @@ class AxisMover():
     def MovePlanner(self, checkpoints, ret=False):
         
         done = False
-        self.checkpoints=checkpoints
         
         if self.move_counter==-1:
+            self.checkpoints=checkpoints
             self.MoveTo(checkpoints[0])
             self.evalCPs()
             self._updatePos()
+            self.prev_target = checkpoints[0]
           
         
         next_cp = self.checkpoints[0]
@@ -139,11 +143,13 @@ class AxisMover():
             direction = (next_cp[:3] - self.current_pos[:3]) / dist_to_cp
             step = direction * self.step_size
             step = np.append(step, 0)
-            target_pos = self.current_pos + step
-            target_pos[3] = next_cp[3]
+            target_pos = self.prev_target + step
+            target_pos[3] = self.prev_target[3]
         
         # move
         self.MoveTo(target_pos)
+        self.prev_target = target_pos
+        
         
         # update state
         self.move_counter += 1

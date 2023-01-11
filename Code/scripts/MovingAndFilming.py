@@ -64,7 +64,7 @@ axis_mover = AxisMover(CGA_x, CGA_y, CGA_z, CGA_r, configs)
 
 
 checkpoints = np.array([(0,0,0,0), (0,-1,0,270),
-                         (-1,-1,0,180), (-1,0,0,90), (0,0,0,90)])
+                         (-1,-1,0,180), (-1,0,0,90), (-1,0,40,90), (0,0,40,90)])
 
 try:
     while True:
@@ -101,7 +101,7 @@ try:
 finally:
 
     # Stop streaming
-    stereo_cam.pipeline.stop()
+    stereo_cam.stopStreaming()
     cv2.destroyAllWindows()
     
 

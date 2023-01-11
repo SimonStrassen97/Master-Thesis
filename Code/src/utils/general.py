@@ -61,6 +61,10 @@ class AxisConfigs(ConfigBase):
     r_max: float = 360
     
     n_images: int = 50
+    
+    x_cali: float = 100
+    y_cali: float = 100
+    z_cali: float = 100
     # output_dir: str = "C:\\Users\SI042101\ETH\Master_Thesis\PyData"
     
 @dataclass
