@@ -25,14 +25,19 @@ from utils.general import AxisConfigs, StreamConfigs
 
 cv2.destroyAllWindows()
 
-
+calibrate=True
+vis=False
 output_dir = "C:\\Users\SI042101\ETH\Master_Thesis\Data\PyData"
 
 time_string = datetime.now().strftime('%Y%m%d_%H%M%S')
 data_output_folder = os.path.join(output_dir, time_string)
 os.makedirs(data_output_folder)
 
-vis = False
+
+if calibrate ==True:
+    calibration_folder = os.path.join(data_output_folder, "calibration")
+    os.makedirs(calibration_folder)
+
 
 
 CGA_x = Axis("CGA", "x",os.path.realpath('..\src\PyTeMotion\ConfigurationData\RGA\Fluent_CGA_Config.xml') )
@@ -51,6 +56,9 @@ CGA_y.Initialize()
     
 
 
+#########################################################
+# cali
+
 # Cam init
 stream_configs = StreamConfigs(c_hfov=848)
 stereo_cam = StereoCamera(activate_adv=True)
@@ -59,27 +67,149 @@ stereo_cam.startStreaming(stream_configs)
 
 # Mover init
 configs = AxisConfigs(n_images=50)
-axis_mover = AxisMover(CGA_x, CGA_y, CGA_z, CGA_r, configs)
+calibration = AxisMover(CGA_x, CGA_y, CGA_z, CGA_r, configs)
 
 
+ref = [285,200,250]
+calibration_points = np.array([(0,0,0,0),(0,100,0,0), (0,200,0,0), (0,300,0,0),
+                              (0,300,0,-45), (100,350,0,-45), (400, 400,0,-120),
+                              (450,0,0,120), (100,50,0,30), (200,0,0,60),
+                              (0,0,50,35), (200,0,50,75), (400,0,25,135),
+                              (150,350,75,-45), (300,400,60,-90), (500,200,60,180)])
 
-checkpoints = np.array([(0,0,0,0), (0,-1,0,270),
-                         (-1,-1,0,180), (-1,0,0,90), (-1,0,40,90), (0,0,40,90)])
 
 try:
     while True:
 
         
         # calc next move and execute
-        done, target_pos, error = axis_mover.MovePlanner(checkpoints, ret=True)
+        done = calibration.CalibrationMover(calibration_points)
+                
+        # take img
+        color_img, _ = stereo_cam.getFrame(ret=True)
+        
+        # saving imgs, pose data and pcl
+        stereo_cam.saveImages(calibration_folder, calibration.move_counter-1)
+        calibration.saveData(calibration_folder)
+        
+        
+        # Show images
+        if vis:
+            cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
+            cv2.imshow('RealSense', color_img)
+        
+        
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+            if cv2.waitKey(0) & 0xFF == ord('c'):
+                cv2.destroyAllWindows()
+                continue
+        
+        if done:
+            break
+
+finally:
+
+    # Stop streaming
+    stereo_cam.stopStreaming()
+    cv2.destroyAllWindows()
+
+
+
+####################################################33
+#random Moves cali
+
+
+# Cam init
+stream_configs = StreamConfigs(c_hfov=848)
+stereo_cam = StereoCamera(activate_adv=True)
+stereo_cam.startStreaming(stream_configs)
+
+
+# Mover init
+configs = AxisConfigs(n_images=50)
+axis = AxisMover(CGA_x, CGA_y, CGA_z, CGA_r, configs)
+calibration = AxisMover(CGA_x, CGA_y, CGA_z, CGA_r, configs)
+
+
+
+    
+try:
+    while True:
+
+        
+        # calc next move and execute
+        done, dest = calibration.RandomCalibrationMoves()
+                
+        # take img
+        cv2.waitKey(300)
+        color_img, _ = stereo_cam.getFrame(ret=True)
+        stereo_cam.saveImages(calibration_folder, calibration.move_counter-1)
+        calibration.saveData(calibration_folder)
+        
+        
+        # saving imgs, pose data and pcl
+     
+        
+        
+        # Show images
+        if vis:
+            cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
+            cv2.imshow('RealSense', color_img)
+        
+        
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+            if cv2.waitKey(0) & 0xFF == ord('c'):
+                cv2.destroyAllWindows()
+                continue
+        
+        if done:
+            break
+
+finally:
+
+    # Stop streaming
+    stereo_cam.stopStreaming()
+    cv2.destroyAllWindows()
+    
+    
+    
+
+
+#####################################################3
+# data acquisition
+
+# Cam init
+stream_configs = StreamConfigs(c_hfov=848)
+stereo_cam = StereoCamera(activate_adv=True)
+stereo_cam.startStreaming(stream_configs)
+
+
+# Mover init
+configs = AxisConfigs(n_images=50)
+axis = AxisMover(CGA_x, CGA_y, CGA_z, CGA_r, configs)
+
+
+checkpoints = np.array([(0,0,0,0), (0,-1,0,270),
+                         (-1,-1,0,180), (-1,0,0,90), (-1,0,40,90), (0,0,40,90)])
+
+
+
+try:
+    while True:
+
+        
+        # calc next move and execute
+        done, target_pos, error = axis.MovePlanner(checkpoints, ret=True)
                 
         # take img
         color_img, depth_img = stereo_cam.getFrame(ret=True)
         
         # saving imgs, pose data and pcl
-        stereo_cam.saveImages(data_output_folder, axis_mover.move_counter)
-        stereo_cam.savePCL(data_output_folder, axis_mover.move_counter)
-        axis_mover.saveData(data_output_folder)
+        stereo_cam.saveImages(data_output_folder, axis.move_counter-1)
+        stereo_cam.savePCL(data_output_folder, axis.move_counter-1)
+        axis.saveData(data_output_folder)
         
         
         # Show images

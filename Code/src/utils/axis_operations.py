@@ -9,6 +9,7 @@ import os
 import numpy as np
 import pandas as pd
 import cv2
+import random
 
 class AxisMover():
     def __init__(self, x, y, z, r, configs):
@@ -27,14 +28,10 @@ class AxisMover():
         self.data = []
         
         # Axis state
-        self.move_counter = -1
+        self.move_counter = 0
         
         self._updatePos()
         
-        
-    def calibration(self, ):
-        pass
-    
     
     def _updatePos(self, update=False):
         
@@ -67,6 +64,8 @@ class AxisMover():
 
             self.CGA_r.MoveFor(-r_0)
             self.CGA_r.MoveFor(r)
+        
+        self._updatePos()
             
             
     def MoveFor(self, dist):
@@ -116,16 +115,69 @@ class AxisMover():
         header = ["it", "x_target", "y_target", "z_target", "r_target", "x_read", "y_read", "z_read", "r_read"]
 
         df.to_csv(file, header=header, index=False)
+    
+    def CalibrationMover(self, checkpoints):
+        
+        done = False
+        
+        if self.move_counter==0:
+            self.checkpoints=checkpoints
+            self.prev_target = checkpoints[0]
+        
+        target_pos = self.checkpoints[self.move_counter]
+        self.MoveTo(target_pos)
+        self.prev_target = target_pos
+        
+        
+        # update state
+        # self._updatePos()
+        error = target_pos-self.current_pos
+        
+        # add to data
+        data_list = [self.move_counter] + [x for x in target_pos] + [x for x in self.current_pos]
+        self.data.append(data_list)
+        self.move_counter += 1
+        
+        if self.move_counter==len(checkpoints):
+            done=True
+        
+        return done
+        
+        
+    def RandomCalibrationMoves(self, moves=20, ref=(285,200,250)):
+        
+            
+        x = random.uniform(0,500)
+        ret=False
+        
+        is_outside = True if abs(x-ref[0]) > 175 else False
+        in_front = random.choice([0,1])
+        
+        y = is_outside * random.uniform(0,400) + (1-is_outside) * (in_front*random.uniform(0,25) + (1-in_front)*random.uniform(400,450)) 
+        z = random.uniform(0,50)
+        
+        r = np.arctan2((ref[1]-y),(ref[0]-x))*180/np.pi
+        target_pos = (x,y,z,r)
+        self.MoveTo(target_pos)
+        
+        data_list = [self.move_counter] + [x for x in target_pos] + [x for x in self.current_pos]
+        self.data.append(data_list)
+        self.move_counter +=1
+        
+        if self.move_counter==30:
+            ret=True
+        
+        return ret, target_pos
         
     def MovePlanner(self, checkpoints, ret=False):
         
         done = False
         
-        if self.move_counter==-1:
+        if self.move_counter==0:
             self.checkpoints=checkpoints
             self.MoveTo(checkpoints[0])
             self.evalCPs()
-            self._updatePos()
+            # self._updatePos()
             self.prev_target = checkpoints[0]
           
         
@@ -152,14 +204,14 @@ class AxisMover():
         
         
         # update state
-        self.move_counter += 1
-        self._updatePos()
+        # self._updatePos()
         error = target_pos-self.current_pos
         
         
         # add to data
         data_list = [self.move_counter] + [x for x in target_pos] + [x for x in self.current_pos]
         self.data.append(data_list)
+        self.move_counter += 1
         
         if ret:
             return done, target_pos, error

@@ -57,14 +57,11 @@ class StreamConfigs(ConfigBase):
 class AxisConfigs(ConfigBase):
     x_max: float = 650
     y_max: float = 475
-    z_max: float = 250
+    z_max: float = 125
     r_max: float = 360
     
     n_images: int = 50
-    
-    x_cali: float = 100
-    y_cali: float = 100
-    z_cali: float = 100
+
     # output_dir: str = "C:\\Users\SI042101\ETH\Master_Thesis\PyData"
     
 @dataclass
@@ -81,10 +78,19 @@ class PCLConfigs(ConfigBase):
     border_y: tuple = (-0.1, 0.7)
     border_z: tuple = (0.05, 0.5)
     
-    hp_radius: float = 125
+    # filters
+    hp_radius: float = 75
+    angle_thresh: float = 95
     
     # mesh
     recon_method: str = "poisson"
+    
+    # registration
+    registration_method: str = "plane"
+    registration_radius: float = 0.005 
+    
+    # registration_method: str = "color"
+    # registration_radius: float = 0.05
     
     
     # vis
@@ -97,21 +103,30 @@ class PCLConfigs(ConfigBase):
     n_images: int = 0
     
     
-    
-    
-    
-class CameraOffset(ConfigBase):
-    # Offset parameters between Camera and RGA coordinates in Arm coordinates with corrected z7
+@dataclass
+class OffsetParameters(ConfigBase):
+    # Offset parameters between Camera and RGA coordinates in Arm coordinates (in arm coords)
 
     # mm
-    x: float = 80
-    y: float = 25
-    z: float = 0
+    x_cam: float = 80
+    y_cam: float = 25
+    z_cam: float = 0
     
     # deg
-    r_x: float = 3
-    r_y: float = 52
-    r_z: float = -7
+    r_x_cam: float = 4
+    r_y_cam: float = 52
+    r_z_cam: float = -7
+    
+    # Init move parameters in Arm coordinates
+    
+    # Offset parameters between RGA coordinates and World (WT) coordinates (in world coords)
+    
+    # mm
+    x_arm: float = 83
+    y_arm: float = 77.15
+    z_arm: float = 341.75
+    
+    
     
     
 
