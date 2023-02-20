@@ -145,17 +145,22 @@ class StereoCamera():
         
         depth_frame = self.frames.get_depth_frame()
         color_frame = self.frames.get_color_frame()
-             
-        self.depth_frame=depth_frame
+        disp_frame = rs.disparity_transform(True).process(depth_frame)
+        # disp units: 1/32
         
+        
+        #####################
         self.pcl = self.PCL.calculate(depth_frame)
         self.PCL.map_to(color_frame)
          
        
         # Convert images to numpy arrays
+        
         depth_img = np.asanyarray(depth_frame.get_data())
         color_img = np.asanyarray(color_frame.get_data())
-       
+        disp_img = np.asanyarray(disp_frame.get_data())
+        
+    
         # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
         # depth_img = cv2.applyColorMap(cv2.convertScaleAbs(depth_img, alpha=0.03), cv2.COLORMAP_JET)
        
@@ -168,6 +173,7 @@ class StereoCamera():
         
         self.color_img = color_img
         self.depth_img = depth_img
+        self.disp_img = disp_img
         
         if ret:
             return color_img, depth_img
@@ -189,16 +195,21 @@ class StereoCamera():
         depth_name  = f"{str(counter).zfill(4)}_depth.png"
         img_name = f"{str(counter).zfill(4)}_img.png"
         
+        # real_depth_folder = os.path.join(path, "depth")
         depth_folder = os.path.join(path, "depth")
         img_folder = os.path.join(path, "img")
         
         if not os.path.exists(depth_folder):
             os.makedirs(depth_folder)
             os.makedirs(img_folder)
+            # os.makedirs(real_depth_folder)
         
+        # real_depth_file = os.path.join(real_depth_folder, depth_name)
         depth_file = os.path.join(depth_folder, depth_name)
         img_file = os.path.join(img_folder, img_name)
    
+    
+        # np.save(real_depth_file, self.depth_img)
         cv2.imwrite(depth_file, self.depth_img.astype("uint16"))
         cv2.imwrite(img_file, self.color_img)
             
@@ -226,22 +237,6 @@ class StereoCamera():
         print("Found device that supports advanced mode:", dev.get_info(rs.camera_info.name))
         return dev
     
-    def getIntrinsicMatrix(self):
-        
-        c = self.intrinsics.get("color")
-        d = self.intrinsics.get("depth")
-        
-        K_c = np.array([[c.get("fx"), 0, c.get("cx")],
-                             [0 , c.get("fy"), c.get("cy")],
-                             [0 , 0 , 1]
-                             ])
-        
-        K_d = np.array([[d.get("fx"), 0, d.get("cx")],
-                             [0 , d.get("fy"), d.get("cy")],
-                             [0 , 0 , 1]
-                             ])
-       
-        return K_c, K_d
         
 
     def loadSettings(self, path):
@@ -270,7 +265,8 @@ class StereoCamera():
         
         with open(path, "w") as f:
             f.write(json_file)
-    
+            
+               
     def saveIntrinsics(self, path=None):
         
         if not self.intrinsics:
@@ -291,6 +287,23 @@ class StereoCamera():
             
         with open(file, "rb") as f:
             self.intrinsics = pickle.load(f)
+            
+    def getIntrinsicMatrix(self):
+        
+        c = self.intrinsics.get("color")
+        d = self.intrinsics.get("depth")
+        
+        K_c = np.array([[c.get("fx"), 0, c.get("cx")],
+                             [0 , c.get("fy"), c.get("cy")],
+                             [0 , 0 , 1]
+                             ])
+        
+        K_d = np.array([[d.get("fx"), 0, d.get("cx")],
+                             [0 , d.get("fy"), d.get("cy")],
+                             [0 , 0 , 1]
+                             ])
+       
+        return K_c, K_d
         
             
     def savePCL(self, path, counter):

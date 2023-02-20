@@ -74,14 +74,17 @@ class PCLConfigs(ConfigBase):
     
     # CleanUp
     # m
-    border_x: tuple = (-0.1, 2)
-    border_y: tuple = (-0.1, 0.7)
-    border_z: tuple = (0.05, 0.5)
+    border_x: tuple = (-0.0, 0.700)
+    border_y: tuple = (-0.01, 0.600)
+    border_z: tuple = (-0.02, 0.5)
     
     # filters
     hp_radius: float = 75
     angle_thresh: float = 95
+    std_ratio: float = 0.5
     
+    nb_points: int = 20 
+    outlier_radius: float = 0.1
     # mesh
     recon_method: str = "poisson"
     
@@ -108,13 +111,14 @@ class OffsetParameters(ConfigBase):
     # Offset parameters between Camera and RGA coordinates in Arm coordinates (in arm coords)
 
     # mm
-    x_cam: float = 80
+    x_cam: float = 65
     y_cam: float = 25
-    z_cam: float = 0
+    z_cam: float = 25
+    
     
     # deg
-    r_x_cam: float = 4
-    r_y_cam: float = 52
+    r_x_cam: float = 0
+    r_y_cam: float = 49
     r_z_cam: float = -7
     
     # Init move parameters in Arm coordinates

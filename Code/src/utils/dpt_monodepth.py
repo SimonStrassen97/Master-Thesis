@@ -52,29 +52,14 @@ def run(img, img_name, output_path, model_path, model_type="dpt_hybrid", absolut
             enable_attention_hooks=False,
         )
         normalization = NormalizeImage(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-    elif model_type == "dpt_hybrid_kitti":
-        net_w = 1216
-        net_h = 352
-
-        model = DPTDepthModel(
-            path=model_path,
-            scale=0.00006016,
-            shift=0.00579,
-            invert=True,
-            backbone="vitb_rn50_384",
-            non_negative=True,
-            enable_attention_hooks=False,
-        )
-
-        normalization = NormalizeImage(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
     elif model_type == "dpt_hybrid_nyu":
         net_w = 640
         net_h = 480
 
         model = DPTDepthModel(
             path=model_path,
-            scale=0.000305,
-            shift=0.1378,
+            scale=0.0001,
+            shift=0,
             invert=True,
             backbone="vitb_rn50_384",
             non_negative=True,
@@ -154,9 +139,6 @@ def run(img, img_name, output_path, model_path, model_type="dpt_hybrid", absolut
             .cpu()
             .numpy()
         )
-
-        if model_type == "dpt_hybrid_kitti":
-            prediction *= 256
 
         if model_type == "dpt_hybrid_nyu":
             prediction *= 1000.0

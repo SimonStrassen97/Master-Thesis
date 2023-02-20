@@ -172,15 +172,26 @@ class PointCloud():
         
     def _removeOutliers(self):
         
-        _, ind = self.pcl.remove_statistical_outlier(nb_neighbors=20,
-                                                    std_ratio=1)
+        _, ind = self.pcl.remove_statistical_outlier(nb_neighbors=50,
+                                                    std_ratio=self.configs.std_ratio)
+        
         
         print(f"Outlier filter removed {len(self.pcl.points)-len(ind)} points.")
         # cl, self.ind = self.pcl_r.remove_radius_outlier(nb_points=5, radius=0.020)
         
-        outlier_cloud = self.pcl.select_by_index(ind, invert=True)
+        outlier_cloud1 = self.pcl.select_by_index(ind, invert=True)
         self.pcl = self.pcl.select_by_index(ind)
         
+        # _, ind = self.pcl.remove_radius_outlier(nb_points=self.configs.nb_points, radius=self.configs.outlier_radius)
+        
+        # print(f"Outlier filter removed {len(self.pcl.points)-len(ind)} points.")
+        
+        
+        # outlier_cloud2 = self.pcl.select_by_index(ind, invert=True)
+        # self.pcl = self.pcl.select_by_index(ind)
+        
+        
+        outlier_cloud = outlier_cloud1 #+ outlier_cloud2
         outlier_cloud.paint_uniform_color([0.7, 0.7, 0])
     
         
@@ -191,16 +202,28 @@ class PointCloud():
     def _removeBackground(self):
         
         points = np.array(self.pcl.points)
+        
+        
+        x,y,z = self.configs.border_x, self.configs.border_y, self.configs.border_z
+        x_arm, y_arm, z_arm = self.offsets.x_arm/1000, self.offsets.y_arm/1000, self.offsets.z_arm/1000
+        
+        x = tuple(x_-x_arm for x_ in x)
+        y = tuple(y_-y_arm for y_ in y)
+        z = tuple(z_-z_arm for z_ in z)
+        
+        self.x=x
+        self.y=y
+        self.z=z
          
-        in_x = np.logical_and(points[:,0] > self.configs.border_x[0],
-                                  points[:,0] < self.configs.border_x[1])
+        in_x = np.logical_and(points[:,0] > x[0],
+                                  points[:,0] < x[1])
         
        
-        in_y = np.logical_and(points[:,1] > self.configs.border_y[0],
-                                  points[:,1] < self.configs.border_y[1])
+        in_y = np.logical_and(points[:,1] > y[0],
+                                  points[:,1] < y[1])
         
-        in_z = np.logical_and(points[:,2] < -self.configs.border_z[0],
-                                  points[:,2] > -self.configs.border_z[1])
+        in_z = np.logical_and(points[:,2] > z[0],
+                                  points[:,2] < z[1])
         
         
         condition = in_z & in_x & in_y
@@ -271,12 +294,11 @@ class PointCloud():
         files = os.listdir(pcl_folder)
         
         if self.configs.n_images:
-            every_x = int(len(files)/self.configs.n_images)
-            start = int(every_x/2)
-            files = files[start::every_x]  
+            idx = np.linspace(0, len(files) - 1, self.configs.n_images).astype(int)
+      
         
-        for file in files:
-            fpath = os.path.join(pcl_folder, file)
+        for i in idx:
+            fpath = os.path.join(pcl_folder, files[i])
             pcl = o3d.io.read_point_cloud(fpath)
             self.pcl_ = pcl.voxel_down_sample(voxel_size=self.configs.voxel_size)
             
@@ -304,16 +326,13 @@ class PointCloud():
         dptfiles = [d for d in dptfiles if d.endswith(".png")]
         
         if self.configs.n_images:
-            every_x = int(len(dptfiles)/self.configs.n_images)
-            start = int(every_x/2)
-            dptfiles = dptfiles[start::every_x] 
-            ifiles = ifiles[start::every_x]
+            idx = np.linspace(0, len(dptfiles) - 1, self.configs.n_images).astype(int)
             
             
-        for dptfile, dfile, ifile in zip(dptfiles, dfiles, ifiles):
-            dptpath = os.path.join(dpt_folder, dptfile)
-            dpath = os.path.join(depth_folder, dfile)
-            ipath = os.path.join(img_folder, ifile)
+        for i in idx:
+            dptpath = os.path.join(dpt_folder, dptfiles[i])
+            dpath = os.path.join(depth_folder, dfiles[i])
+            ipath = os.path.join(img_folder, ifiles[i])
             
             dpt = cv2.imread(dptpath,0)
             depth = cv2.imread(dpath,0)

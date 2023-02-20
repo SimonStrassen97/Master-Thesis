@@ -19,30 +19,33 @@ import scipy.optimize
 from utils.general import OffsetParameters, PCLConfigs, StreamConfigs
 from utils.point_cloud_operations2 import PointCloud
 from utils.camera_operations import StereoCamera
+from utils.worktable_operations import Object, Worktable
 import utils.dpt_monodepth as dpt
-
-
+import pyransac3d as pyrsc
 
 # from pcls
 
 path = "C:/Users\SI042101\ETH\Master_Thesis\Data/PyData/20230110_165007"
 
 
-cam_offset = OffsetParameters(r_x_cam=0)
 
+cam_offset = OffsetParameters(y_cam=25)
 
-
-pcl_configs = PCLConfigs(voxel_size=0.01,
+pcl_configs = PCLConfigs(voxel_size=0.005,
                           depth_thresh=1,
-                          vis=True,
+                          vis=False,
                           # color="gray",
                           n_images=8,
                           outliers=False,
                           hp_radius=75,
+                          angle_thresh=95,
+                          std_ratio=1,
+                          nb_points=10,
+                          outlier_radius=0.01,
                           recon_method="poisson",
-                          registration_method="plane",
+                          registration_method="",
                           registration_radius=0.003,
-                          coord_scale=0.3
+                          coord_scale=0.1
                           )
 
 
@@ -50,11 +53,118 @@ pcl = PointCloud(pcl_configs, cam_offset)
 pcl.loadPCL(path)
 pcl.ProcessPCL()
 
+pcl.visualize(pcl.unified_pcl, outliers=False, coord_scale=0.3)
+
+
+p = pcl.unified_pcl
+pts = np.asarray(p.points)
+
+
+
+         
+# gridified wt
+   
+wt = Worktable()
+wt.gridify_wt(pts)
+wt.visualize()
+
+
+
+
+
+pts = np.asarray(p.points)
+normals = np.asarray(p.normals)
+labels = np.zeros((len(pts),1))
+
+output = np.hstack([pts, normals, labels])
+out_path = os.path.join(path, "pcl_out.txt")
+
+np.savetxt(out_path, output)
+
+##############
+
+
+plane = pyrsc.Plane()
+_, ind = plane.fit(pts,0.01)
+
+base_ = p.select_by_index(ind)
+objects_ = p.select_by_index(ind, invert=True)
+
+_, ind = base_.remove_statistical_outlier(nb_neighbors=50, std_ratio=1)
+base = base_.select_by_index(ind)
+_, ind = objects_.remove_statistical_outlier(nb_neighbors=1000, std_ratio=0.0001)
+objects = objects_.select_by_index(ind)
+_, ind = objects.remove_radius_outlier(nb_points=75, radius=0.02)
+objects = objects.select_by_index(ind)
+
+correction = np.mean(np.asarray(base.points)[:,2])
+
+o3d.visualization.draw_geometries([base])
+o3d.visualization.draw_geometries([objects])
+
+
+p2_base = np.array(base.get_axis_aligned_bounding_box().max_bound)
+p1_base = np.array(base.get_axis_aligned_bounding_box().min_bound)
+p2_obj = np.array(objects.get_axis_aligned_bounding_box().max_bound)
+p1_obj = np.array(objects.get_axis_aligned_bounding_box().min_bound)
+
+
+
+# build model
+
+nest = Object()
+nest.create_from_aabb(p1_obj, p2_obj, color="orange")
+
+
+plate = Object()
+plate.create_from_aabb(p1_base, p2_base)
+
+
+wt = Worktable()
+wt.add([nest, plate])
+
+wt.visualize()
+        
+
+
+# build reference wt
+
+ref_nest = Object()
+
+center = np.array([270.8,247.5,34.5], dtype=float)/1000 +np.array([0.075,0,0])
+extent = np.array([137.3,95.0,69.0], dtype=float)/1000
+ref_nest.create_from_center(center, extent, color="red")
+
+
+ref_base = Object()
+
+p1 = np.array([0,0,-5], dtype=float)/1000
+p2 = np.array([700, 500, 0], dtype=float)/1000
+ref_base.create_from_aabb(p1, p2)
+
+
+
+ref_wt = Worktable()
+ref_wt.add([ref_nest, ref_base])
+# ref_wt.visualize()
+
+test_wt = Worktable()
+test_wt.add([nest,plate,ref_nest])
+test_wt.visualize()
+        
+        
+
+
+
+
+
 
 pcl.createMesh()
 
 o3d.visualization.draw_geometries([pcl.mesh])
 
+mesh = pcl.mesh.filter_smooth_taubin()
+o3d.visualization.draw_geometries([mesh])
 
 
 #######################################################################################################
@@ -150,44 +260,5 @@ o3d.visualization.draw_geometries([pcl.mesh])
 # ax[0].imshow(depth)
 # ax[1].imshow(dpt)
 
-
-
-
-
-
-
-### code for additional clean up if needed
-
-
-# for i in range(40,50):
-#     pcl.visualize(pcl.pcls[i], outliers=False)
-   
-points = [[0, 0, 0], list(pcl.view_dir)]
-lines = [[0, 1]]
-colors = [[1, 0, 0] for i in range(len(lines))]
-line_set = o3d.geometry.LineSet()
-line_set.points = o3d.utility.Vector3dVector(points)
-line_set.lines = o3d.utility.Vector2iVector(lines)
-line_set.colors = o3d.utility.Vector3dVector(colors)
-
-p = pcl.pcls[0]
-p.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
-
-o3d.visualization.draw_geometries([p])
-
-n = np.asarray(p.normals)
-angles = np.arccos(np.dot(n,pcl.view_dir2))*180/np.pi
-
-
-
-ind = np.where(angles<60)[0]
-
-good = p.select_by_index(ind, invert=True)
-bad = p.select_by_index(ind)
-
-good.paint_uniform_color([0.8, 0.8,0.8])
-bad.paint_uniform_color([1,0,0])
-origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1, origin=np.array([0., 0., 0.]))
-o3d.visualization.draw_geometries([good, bad, origin, line_set])
 
 
