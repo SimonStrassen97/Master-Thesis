@@ -12,24 +12,24 @@ import os, sys
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd
+
 import open3d as o3d
 import copy
 import numpy.polynomial.polynomial as poly
 import pickle
 
-from scipy.spatial.transform import Rotation as Rot
+# from scipy.spatial.transform import Rotation as Rot
 from utils.general import StreamConfigs, ResizeWithAspectRatio
 from utils.general import OffsetParameters, PCLConfigs, StreamConfigs
 from utils.point_cloud_operations2 import PointCloud
 from utils.camera_operations import StereoCamera
-from utils.dpt_monodepth import run
+# from utils.dpt_monodepth import run
 # import open3d as o3d
 
 # from pyqtgraph.Qt import QtCore, QtGui
 # import pyqtgraph.opengl as gl
 
-cv2.destroyAllWindows()
+# cv2.destroyAllWindows()
 plt.close()
 
 
@@ -66,81 +66,28 @@ def loadIntrinsics(file=None):
     return K
 
 
-root = "J:/GitHub/Datasets/Simple_WT"
-WEIGHTS = "J://GitHub\MT_Temp/DPT/weights/dpt_hybrid-midas-501f0c75.pt"
-out = os.path.join(root, "DPT_Out")
 
-pd = os.path.join(root, "depth")
-pi = os.path.join(root, "img")
+cp = "/home/simonst/github/sparse-to-dense/results/ResNet18_L2/checkpoint-249.pth.tar"
 
-img = cv2.imread(os.path.join(pi, "0000_img.png"), -1)
-dmap = cv2.imread(os.path.join(pd, "0000_depth.png"), -1)
-pp = "C://Users\SI042101\ETH\Master_Thesis\Data\PyData/20230110_165007\PCL/0000_pcl.ply"
-
-dpt = run(img, "0000_img.png", output_path=out, model_path=WEIGHTS ,model_type="dpt_hybrid_nyu")
-
-a = dmap.copy()
-a[a==0] = dpt[a==0]
-plt.imshow(a)
-
-dpt/dmap
+cam_offset = OffsetParameters(r_z_cam=3)
+pcl_configs = PCLConfigs(outliers=False, voxel_size=0.001)
+path = "/home/simonst/github/Datasets/wt/20230110_165007"
 
 
+pcl = PointCloud(pcl_configs, cam_offset)
+pcl2 = PointCloud(pcl_configs, cam_offset)
 
-depth = dmap.astype(np.float64) * 0.0001
+
 K = loadIntrinsics()
+pcl.load_PCL_from_depth(path, K) #run_s2d=cp)
+pcl2.load_PCL(path)
 
-
-cam_offset = OffsetParameters(y_cam=25)
-
-pcl_configs = PCLConfigs(voxel_size=0.005,
-                          depth_thresh=1,
-                          vis=False,
-                          # color="gray",
-                          n_images=8,
-                          outliers=False,
-                          hp_radius=75,
-                          angle_thresh=95,
-                          std_ratio=1,
-                          nb_points=10,
-                          outlier_radius=0.01,
-                          recon_method="poisson",
-                          registration_method="",
-                          registration_radius=0.003,
-                          coord_scale=0.1
-                          )
-
-pcl1 = PointCloud(pcl_configs,cam_offset)
-
-pcl2 = PointCloud(pcl_configs,cam_offset)
-
-
-pcl = pcl1.pcl_from_depth(img, depth, K)
-pcl_ = o3d.io.read_point_cloud(pp)
-R  = pcl_.get_rotation_matrix_from_xyz((np.pi, 0, 0))
-pcl_.rotate(R, center=(0,0,0))
-
-pcl.translate((0.5,0,0))
-
-points_ = np.array(pcl_.points)
-condition = points_[:,2] < 0.7
-ind = np.where(condition)[0]
-pcl_ = pcl_.select_by_index(ind)
-
-points = np.array(pcl.points)
-condition = points[:,2] < 0.7
-ind = np.where(condition)[0]
-pcl = pcl.select_by_index(ind)
+pcl.ProcessPCL()
+pcl2.ProcessPCL()
 
 
 
-
-o3d.visualization.draw_geometries([pcl, pcl_])
-
-
-
-
-
+# o3d.visualization.draw_geometries([pcl.unified_pcl])
 
 
 
