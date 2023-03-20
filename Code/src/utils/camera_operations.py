@@ -24,6 +24,8 @@ import open3d as o3d
 
 
 
+
+
     
    
 
@@ -139,13 +141,33 @@ class StereoCamera():
     def getFrame(self, color=True, depth=True, ret=False):
 
         # Wait for a coherent pair of frames: depth and color
+           
         self.frames = self.pipeline.wait_for_frames()
-        # self.colorized = self.colorizer.process(frames)
         
         
+
+        # dec_filter = rs.decimation_filter ()       # Decimation - reduces depth frame density
+        d_to_disp = rs.disparity_transform(True)
+        spat_filter = rs.spatial_filter()          # Spatial    - edge-preserving spatial smoothing
+        temp_filter = rs.temporal_filter()
+        disp_to_d = rs.disparity_transform(False)
+        
+        
+        spat_filter.set_option(rs.option.holes_fill, 3)
+
+
         depth_frame = self.frames.get_depth_frame()
         color_frame = self.frames.get_color_frame()
-        disp_frame = rs.disparity_transform(True).process(depth_frame)
+        
+        
+                
+        filtered = depth_frame
+        # filtered = dec_filter.process(filtered)
+        # filtered = d_to_disp.process(filtered)
+        filtered = spat_filter.process(filtered)
+        # filtered = disp_to_d.process(filtered)
+        
+        # filtered = temp_filter.process(filtered)
         # disp units: 1/32
         
         
@@ -158,7 +180,9 @@ class StereoCamera():
         
         depth_img = np.asanyarray(depth_frame.get_data())
         color_img = np.asanyarray(color_frame.get_data())
-        disp_img = np.asanyarray(disp_frame.get_data())
+        # disp_img = np.asanyarray(disp_frame.get_data())
+        filtered = np.asanyarray(filtered.get_data())
+        # filtered_depth1 = np.asanyarray(filtered1.get_data())
         
     
         # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
@@ -173,7 +197,8 @@ class StereoCamera():
         
         self.color_img = color_img
         self.depth_img = depth_img
-        self.disp_img = disp_img
+        self.filtered_img = filtered
+        # self.disp_img = disp_img
         
         if ret:
             return color_img, depth_img
@@ -194,23 +219,27 @@ class StereoCamera():
          
         depth_name  = f"{str(counter).zfill(4)}_depth.png"
         img_name = f"{str(counter).zfill(4)}_img.png"
+        filtered_name = f"{str(counter).zfill(4)}_depth.png"
         
         # real_depth_folder = os.path.join(path, "depth")
         depth_folder = os.path.join(path, "depth")
         img_folder = os.path.join(path, "img")
+        filtered_folder = os.path.join(path, "filtered")
         
         if not os.path.exists(depth_folder):
             os.makedirs(depth_folder)
             os.makedirs(img_folder)
-            # os.makedirs(real_depth_folder)
+            os.makedirs(filtered_folder)
         
-        # real_depth_file = os.path.join(real_depth_folder, depth_name)
+        filtered_file = os.path.join(filtered_folder, filtered_name)
         depth_file = os.path.join(depth_folder, depth_name)
         img_file = os.path.join(img_folder, img_name)
+        
    
     
         # np.save(real_depth_file, self.depth_img)
         cv2.imwrite(depth_file, self.depth_img.astype("uint16"))
+        cv2.imwrite(filtered_file, self.filtered_img.astype("uint16"))
         cv2.imwrite(img_file, self.color_img)
             
 
