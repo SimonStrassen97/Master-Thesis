@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 import os
 import shutil
+import pickle
 
 
 from dataclasses import dataclass
@@ -354,4 +355,31 @@ def Crop(img, output_size):
         return img[i:i + th, j:j + tw]
  
 
+def _getIntrinsicMatrix(intrinsics):
+    
+    c = intrinsics.get("color")
+    d = intrinsics.get("depth")
+    
+    
+    crop_offset = 8
+    K = np.array([[c.get("fx"), 0, c.get("cx")-crop_offset],
+                         [0 , c.get("fy"), c.get("cy")],
+                         [0 , 0 , 1]
+                         ])
+    
+   
+    return K
+
+def loadIntrinsics(file=None):
+    
+    if not file:
+        file = "./intrinsics.pkl"
+        
+    with open(file, "rb") as f:
+        intrinsics = pickle.load(f)
+    
+    K = _getIntrinsicMatrix(intrinsics)
+
+    return K, intrinsics
+  
 

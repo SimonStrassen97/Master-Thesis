@@ -59,7 +59,7 @@ class PointCloud():
             self.CleanUpPCL()
            
             self.pcls.append(self.pcl)
-            # self.registration()
+            self.registration()
             
             self.unified_pcl += self.pcl
         
@@ -127,6 +127,7 @@ class PointCloud():
         T_z = -(offset_z + self.pose_data[self.idx, 7])/1000
         T = (T_x, T_y, T_z)
         self.pcl.translate(T)
+        aa = 0 
         
         
         
@@ -137,6 +138,7 @@ class PointCloud():
         outlier_cloud += self._removeHiddenPts()
         outlier_cloud += self._removeInfeasablePts()
         outlier_cloud += self._removeOutliers()
+
 
         
         self.outliers.append(outlier_cloud)

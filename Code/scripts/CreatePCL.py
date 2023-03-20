@@ -24,7 +24,7 @@ from utils.worktable_operations import Object, Worktable
 
 # from pcls
 
-path = "/home/simonst/github/Datasets/wt/20230110_165007"
+path = "/home/simonst/github/Datasets/wt/20230227_174221"
 
 
 
@@ -34,7 +34,7 @@ pcl_configs = PCLConfigs(voxel_size=0.005,
                           depth_thresh=1,
                           vis=False,
                           # color="gray",
-                          n_images=8,
+                          n_images=2,
                           outliers=False,
                           hp_radius=75,
                           angle_thresh=95,

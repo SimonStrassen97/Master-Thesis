@@ -19,10 +19,12 @@ import numpy.polynomial.polynomial as poly
 import pickle
 
 # from scipy.spatial.transform import Rotation as Rot
-from utils.general import StreamConfigs, ResizeWithAspectRatio
-from utils.general import OffsetParameters, PCLConfigs, StreamConfigs
+from utils.general import StreamConfigs, PCLConfigs, StreamConfigs, OffsetParameters
+from utils.general import loadIntrinsics, ResizeViaProjection, ResizeWithAspectRatio
+from utils.general import deprojectPoints, projectPoints
 from utils.point_cloud_operations2 import PointCloud
 from utils.camera_operations import StereoCamera
+from utils.worktable_operations import Object, Worktable
 # from utils.dpt_monodepth import run
 # import open3d as o3d
 
@@ -35,62 +37,72 @@ plt.close()
 
 ###################################################################################################
 
-        
-def getIntrinsicMatrix(intrinsics):
     
-    c = intrinsics.get("color")
-    d = intrinsics.get("depth")
-    
-    K_c = np.array([[c.get("fx"), 0, c.get("cx")],
-                         [0 , c.get("fy"), c.get("cy")],
-                         [0 , 0 , 1]
-                         ])
-    
-    K_d = np.array([[d.get("fx"), 0, d.get("cx")],
-                         [0 , d.get("fy"), d.get("cy")],
-                         [0 , 0 , 1]
-                         ])
-   
-    return K_c, K_d
-    
-def loadIntrinsics(file=None):
-    
-    if not file:
-        file = "./intrinsics.pkl"
-        
-    with open(file, "rb") as f:
-        intrinsics = pickle.load(f)
-        
-    K, _ = getIntrinsicMatrix(intrinsics)
-    
-    return K
+
+cp = "/home/simonst/github/sparse-to-dense/results/wt.sparsifier=None.samples=0.modality=rgbd.arch=resnet18.decoder=deconv2.criterion=l1.lr=0.01.bs=4.pretrained=True/checkpoint-99.pth.tar"
+path = "/home/simonst/github/Datasets/wt/raw/20230227_174221"
 
 
+cam_offset = OffsetParameters(r_z_cam=-18, y_cam=22, x_cam=55)
+pcl_configs = PCLConfigs(outliers=False, 
+                         voxel_size=0.001, 
+                         n_images=10,
+                         hp_radius=200,
+                         angle_thresh=0,
+                         std_ratio=1,
+                         # registration_method=None,
+                         )
 
-cp = "/home/simonst/github/sparse-to-dense/results/ResNet18_L2/checkpoint-249.pth.tar"
+K,_ = loadIntrinsics()
 
-cam_offset = OffsetParameters(r_z_cam=3)
-pcl_configs = PCLConfigs(outliers=False, voxel_size=0.001)
-path = "/home/simonst/github/Datasets/wt/20230110_165007"
+# depth = cv2.imread(os.path.join(path, "depth", "0001_depth.png"), -1)
+# out_size = (240,424)
+# depth_, K_ = ResizeViaProjection(depth, K, out_size)
+
+# inter = cv2.resize(depth, out_size[::-1], cv2.INTER_NEAREST)
+
+
+# fig, ax = plt.subplots(1,2)
+# ax[0].imshow(inter)
+# ax[1].imshow(depth_)
+
 
 
 pcl = PointCloud(pcl_configs, cam_offset)
-pcl2 = PointCloud(pcl_configs, cam_offset)
+# pcl2 = PointCloud(pcl_configs, cam_offset)
 
 
-K = loadIntrinsics()
-pcl.load_PCL_from_depth(path, K) #run_s2d=cp)
-pcl2.load_PCL(path)
+pcl.load_PCL_from_depth(path, K) 
+# pcl2.load_PCL_from_depth(path,K,run_s2d=cp)
+
 
 pcl.ProcessPCL()
-pcl2.ProcessPCL()
+# pcl2.ProcessPCL()
+
+def custom_draw(pcd):
+    
+    def rotate(vis):
+        ctr = vis.get_view_control()
+        ctr.rotate(1,0)
+        return False
+    
+    o3d.visualization.draw_geometries_with_animation_callback([pcd], rotate)
+
+custom_draw(pcl.unified_pcl)
+
+# p = pcl.unified_pcl
+# pts = np.asarray(p.points)
 
 
 
-# o3d.visualization.draw_geometries([pcl.unified_pcl])
+         
+# gridified wt
+   
+# wt = Worktable()
+# wt.gridify_wt(pts)
+# wt.visualize()
 
-
-
+#################################################################33
 
 
 
