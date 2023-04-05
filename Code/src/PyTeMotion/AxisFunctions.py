@@ -18,7 +18,6 @@ from Support.AxisWrappers import AxisWrapper
 from Support.AxisWrappers import ConfigurationHelper
 
 
-
 class Axis:
 
     def __init__(self, modul: str, axis: str, configfile: str) -> None:

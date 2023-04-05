@@ -45,25 +45,31 @@ class AxisMover():
         
     def MoveTo(self, dest):
         
-        (x,y,z,r) = dest
-        self.CGA_x.MoveTo(x)
-        self.CGA_y.MoveTo(y)
-        self.CGA_z.MoveTo(z)
-        
-        
-        r_0 = self.current_pos[3]
-        
-        if round(r_0,1) > 180:
-            r_0 -= 360
-        if round(r,1) > 180:
-            r -= 360
-        
-        self.rr = (r_0, r)
-        
-        if round(r_0,1) != round(r,1):
 
-            self.CGA_r.MoveFor(-r_0)
-            self.CGA_r.MoveFor(r)
+        if len(dest)==3:
+            (x,y,z) = dest
+            r = None
+        
+        else:
+            (x,y,z,r) = dest
+            self.CGA_x.MoveTo(x)
+            self.CGA_y.MoveTo(y)
+            self.CGA_z.MoveTo(z)
+        
+        if isinstance(r,(float,int)): 
+            r_0 = self.current_pos[3]
+            
+            if round(r_0,1) > 180:
+                r_0 -= 360
+            if round(r,1) > 180:
+                r -= 360
+            
+            self.rr = (r_0, r)
+            
+            if round(r_0,1) != round(r,1):
+    
+                self.CGA_r.MoveFor(-r_0)
+                self.CGA_r.MoveFor(r)
         
         self._updatePos()
             
@@ -220,6 +226,15 @@ class AxisMover():
         
         
         
+    def calibrate(self, calib_params):
+        
+        z_offset = self.findPlate()
+        x_offset, y_offest = self.findHole()
+        
+        T_arm = None
+        T_cam = None
+        
+        return T_arm, T_cam
             
             
         

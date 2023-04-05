@@ -185,10 +185,11 @@ if AXIS:
 # data acquisition
 
 # Cam init
-stream_configs = StreamConfigs(c_hfov=848)
-stereo_cam = StereoCamera(activate_adv=True)
-stereo_cam.startStreaming(stream_configs)
-
+if CAMERA:
+    stream_configs = StreamConfigs(c_hfov=848)
+    stereo_cam = StereoCamera(activate_adv=True)
+    stereo_cam.startStreaming(stream_configs)
+    
 
 # Mover init
 if AXIS:
@@ -213,10 +214,11 @@ try:
             counter = axis.move_counter
                 
         # take img
-        color_img, depth_img = stereo_cam.getFrame(ret=True)
-        
-        # saving imgs, pose data and pcl
-        stereo_cam.saveImages(data_output_folder, counter-1)
+        if CAMERA:
+            color_img, depth_img = stereo_cam.getFrame(ret=True)
+            
+            # saving imgs, pose data and pcl
+            stereo_cam.saveImages(data_output_folder, counter-1)
         # stereo_cam.1savePCL(data_output_folder, counter-1)
         
         counter += 1
@@ -224,7 +226,7 @@ try:
         
         
         # Show images
-        if vis:
+        if vis and CAMERA:
             # images = np.hstack([color_img, depth_img])
             cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
             cv2.imshow('RealSense', color_img)
@@ -243,9 +245,10 @@ try:
 finally:
 
     # Stop streaming
-    stereo_cam.stopStreaming()
-    cv2.destroyAllWindows()
-    
+    if CAMERA:
+        stereo_cam.stopStreaming()
+        cv2.destroyAllWindows()
+        
 
 # mesh = o3d.io.read_triangle_mesh("C:/Users\SI042101\ETH\Master_Thesis\Data\PyData/20221221_155120\PCL\pcl_frame_51.ply")   
 # # pcl = o3d.io.read_point_cloud("C:/Users\SI042101\ETH\Master_Thesis\Data\PyData/20221221_145837\PCL\pcl_frame_1.ply")   

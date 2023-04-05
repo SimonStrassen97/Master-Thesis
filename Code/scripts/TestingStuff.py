@@ -12,6 +12,7 @@ import os, sys
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 import open3d as o3d
 import copy
@@ -20,11 +21,11 @@ import pickle
 
 # from scipy.spatial.transform import Rotation as Rot
 from utils.general import StreamConfigs, PCLConfigs, StreamConfigs, OffsetParameters
-from utils.general import loadIntrinsics, ResizeViaProjection, ResizeWithAspectRatio
-from utils.general import deprojectPoints, projectPoints
+from utils.general import loadIntrinsics 
 from utils.point_cloud_operations2 import PointCloud
 from utils.camera_operations import StereoCamera
 from utils.worktable_operations import Object, Worktable
+from scipy.spatial.transform import Rotation as Rot
 # from utils.dpt_monodepth import run
 # import open3d as o3d
 
@@ -37,10 +38,9 @@ plt.close()
 
 ###################################################################################################
 
-    
 
 cp = "/home/simonst/github/sparse-to-dense/results/wt.sparsifier=None.samples=0.modality=rgbd.arch=resnet18.decoder=deconv2.criterion=l1.lr=0.01.bs=4.pretrained=True/checkpoint-99.pth.tar"
-path = "/home/simonst/github/Datasets/wt/raw/20230227_174221"
+path = "C:/Users/SI042101\ETH\Master_Thesis/Data/PyData/20230227_111004"
 
 
 cam_offset = OffsetParameters(r_z_cam=-18, y_cam=22, x_cam=55)
@@ -48,60 +48,123 @@ pcl_configs = PCLConfigs(outliers=False,
                          voxel_size=0.001, 
                          n_images=10,
                          hp_radius=200,
-                         angle_thresh=0,
+                         angle_thresh=90,
                          std_ratio=1,
                          # registration_method=None,
                          )
 
-K,_ = loadIntrinsics()
-
-# depth = cv2.imread(os.path.join(path, "depth", "0001_depth.png"), -1)
-# out_size = (240,424)
-# depth_, K_ = ResizeViaProjection(depth, K, out_size)
-
-# inter = cv2.resize(depth, out_size[::-1], cv2.INTER_NEAREST)
+K_d, K_c, intr = loadIntrinsics()
+dist = np.array(intr["color"]["dist"])
 
 
-# fig, ax = plt.subplots(1,2)
-# ax[0].imshow(inter)
-# ax[1].imshow(depth_)
+one = 0
+two = 1
 
+img_1 = cv2.imread(os.path.join(path, "img", str(one).zfill(4) + "_img.png"), -1)[:,:,::-1]
+img_2 = cv2.imread(os.path.join(path, "img", str(one).zfill(4) + "_img.png"), -1)[:,:,::-1]
 
+gray_1 = cv2.cvtColor(img_1,cv2.COLOR_RGB2GRAY)
+gray_2 = cv2.cvtColor(img_2,cv2.COLOR_RGB2GRAY)
 
-pcl = PointCloud(pcl_configs, cam_offset)
-# pcl2 = PointCloud(pcl_configs, cam_offset)
-
-
-pcl.load_PCL_from_depth(path, K) 
-# pcl2.load_PCL_from_depth(path,K,run_s2d=cp)
-
-
-pcl.ProcessPCL()
-# pcl2.ProcessPCL()
-
-def custom_draw(pcd):
+with open(os.path.join(path, "pose_info.csv"), "r") as f:
+    pose_data = pd.read_csv(f).to_numpy()
     
-    def rotate(vis):
-        ctr = vis.get_view_control()
-        ctr.rotate(1,0)
-        return False
-    
-    o3d.visualization.draw_geometries_with_animation_callback([pcd], rotate)
-
-custom_draw(pcl.unified_pcl)
-
-# p = pcl.unified_pcl
-# pts = np.asarray(p.points)
+X_1 = pose_data[one,5:]
+X_2 = pose_data[two,5:]
+D = X_2 - X_1
 
 
+R = Rot.from_euler("ZXY", [D[3],0,0]).as_matrix()
 
-         
-# gridified wt
+R = np.array([[1.0,0.0,0.0], [0.0,1.0,0.0], [0.0,0.0,1.0]])
+t = np.array([D[:3]]).T
+
+R1, R2, P1, P2, Q, _, _  = cv2.stereoRectify(K_c, dist, K_c, dist, img_1.shape[1::-1], R, t)
+
+map_1 = cv2.initUndistortRectifyMap(K_c, dist, R1, P1, img_1.shape[1::-1], cv2.CV_32FC1)
+map_2 = cv2.initUndistortRectifyMap(K_c, dist, R2, P2, img_1.shape[1::-1], cv2.CV_32FC1)
+
+rect_1 = cv2.remap(gray_1,map_1[0],map_1[1], cv2.INTER_LANCZOS4)
+rect_2 = cv2.remap(gray_2,map_2[0],map_2[1], cv2.INTER_LANCZOS4)
+
+stereo = cv2.StereoBM_create()
+# stereo = cv2.StereoSGBM_create()
+# stereo.setMode(cv2.STEREO_SGBM_MODE_HH)
+
+
+
+def nothing(x):
+    pass
+ 
+cv2.namedWindow('disp',cv2.WINDOW_NORMAL)
+cv2.resizeWindow('disp',600,600)
+ 
+cv2.createTrackbar('numDisparities','disp',1,17,nothing)
+cv2.createTrackbar('blockSize','disp',5,50,nothing)
+cv2.createTrackbar('preFilterType','disp',1,1,nothing)
+cv2.createTrackbar('preFilterSize','disp',2,25,nothing)
+cv2.createTrackbar('preFilterCap','disp',5,62,nothing)
+cv2.createTrackbar('textureThreshold','disp',10,100,nothing)
+cv2.createTrackbar('uniquenessRatio','disp',8,100,nothing)
+cv2.createTrackbar('speckleRange','disp',10,100,nothing)
+cv2.createTrackbar('speckleWindowSize','disp',3,25,nothing)
+cv2.createTrackbar('disp12MaxDiff','disp',5,25,nothing)
+cv2.createTrackbar('minDisparity','disp',1,25,nothing)
+# cv2.createTrackbar('P1','disp',5,100,nothing)
+# cv2.createTrackbar('P2','disp',50,200,nothing)
+
+while True:
+ 
    
-# wt = Worktable()
-# wt.gridify_wt(pts)
-# wt.visualize()
-
+    # Updating the parameters based on the trackbar positions
+    numDisparities = cv2.getTrackbarPos('numDisparities','disp')*16
+   
+    blockSize = cv2.getTrackbarPos('blockSize','disp')*2 + 5
+    preFilterType = cv2.getTrackbarPos('preFilterType','disp')
+    preFilterSize = cv2.getTrackbarPos('preFilterSize','disp')*2 + 5
+    preFilterCap = cv2.getTrackbarPos('preFilterCap','disp')
+    textureThreshold = cv2.getTrackbarPos('textureThreshold','disp')
+    # P1 = cv2.getTrackbarPos('P1','disp')*10
+    # P2 = cv2.getTrackbarPos('P2','disp')*10
+    uniquenessRatio = cv2.getTrackbarPos('uniquenessRatio','disp')
+    speckleRange = cv2.getTrackbarPos('speckleRange','disp')
+    speckleWindowSize = cv2.getTrackbarPos('speckleWindowSize','disp')*2
+    disp12MaxDiff = cv2.getTrackbarPos('disp12MaxDiff','disp')
+    minDisparity = cv2.getTrackbarPos('minDisparity','disp')
+     
+    # Setting the updated parameters before computing disparity map
+    stereo.setNumDisparities(numDisparities)
+    stereo.setBlockSize(blockSize)
+    stereo.setPreFilterType(preFilterType)
+    stereo.setPreFilterSize(preFilterSize)
+    stereo.setPreFilterCap(preFilterCap)
+    stereo.setTextureThreshold(textureThreshold)
+    # stereo.setP1(P1)
+    # stereo.setP2(P2)
+    stereo.setUniquenessRatio(uniquenessRatio)
+    stereo.setSpeckleRange(speckleRange)
+    stereo.setSpeckleWindowSize(speckleWindowSize)
+    stereo.setDisp12MaxDiff(disp12MaxDiff)
+    stereo.setMinDisparity(minDisparity)
+ 
+    # Calculating disparity using the StereoBM algorithm
+    disparity = stereo.compute(rect_1,rect_2)
+    # NOTE: Code returns a 16bit signed single channel image,
+    # CV_16S containing a disparity map scaled by 16. Hence it 
+    # is essential to convert it to CV_32F and scale it down 16 times.
+ 
+    # Converting to float32 
+    disparity = disparity.astype(np.float32)
+ 
+    # Scaling down the disparity values and normalizing them 
+    disparity = (disparity/16.0 - minDisparity)/numDisparities
+ 
+    # Displaying the disparity map
+    cv2.imshow("disp",disparity)
+ 
+    # Close window using esc key
+    if cv2.waitKey(1) == 27:
+      break
 #################################################################33
 
 

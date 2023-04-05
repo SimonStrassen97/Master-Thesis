@@ -18,7 +18,7 @@ import open3d as o3d
 import copy
 
 from scipy.spatial.transform import Rotation as Rot
-from utils.general import CameraOffset, PCLConfigs, StreamConfigs
+from utils.general import OffsetParameters, PCLConfigs, StreamConfigs, loadIntrinsics, deprojectPoints
 from utils.point_cloud_operations2 import PointCloud
 # import open3d as o3d
 
@@ -31,12 +31,12 @@ plt.close()
 
 
 CHECKERBOARD = {}
-CHECKERBOARD["size"] = (5,3)
-CHECKERBOARD["scale"] = 0.020
+CHECKERBOARD["size"] = ((5,3))
+CHECKERBOARD["scale"] = 0.02
 
 # cali_data_dir = "J:\GitHub\Recon\Data\CalibrationData/20221130_162627_calibration.json"
 
-calibration_folder = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230113_112221/calibration"
+# calibration_folder = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230320_172148"
 calibration_folder = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230111_145344/calibration"
 
 ###################################################################################################
@@ -67,6 +67,12 @@ objp[0,:,:2] = np.mgrid[0:size[0], 0:size[1]].T.reshape(-1, 2)*scale
 
 image_folder = os.path.join(calibration_folder, "img")
 image_list = os.listdir(image_folder)
+image_list.sort()
+
+depth_folder = os.path.join(calibration_folder, "depth")
+depth_list = os.listdir(depth_folder)
+depth_list.sort()
+
 
 for i, image in enumerate(image_list):
     
@@ -94,8 +100,8 @@ for i, image in enumerate(image_list):
       
 
 
+K_d, K_c,_ = loadIntrinsics()
 _, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
-
 
 mean_error = 0
 for i in range(len(objpoints)):
@@ -105,7 +111,11 @@ for i in range(len(objpoints)):
 print( "total error: {}".format(round(mean_error/len(objpoints),3)) )
 
 
-R, t = cv2.calibrateHandEye(r_hand, t_hand, rvecs, tvecs, cv2.CALIB_HAND_EYE_TSAI)
+
+
+R, t = cv2.calibrateHandEye(r_hand, t_hand, rvecs, tvecs, cv2.CALIB_HAND_EYE_HORAUD)
+
+T = np.vstack([np.hstack([R,t]), [0,0,0,1]])
 
 
 R_vis = Rot.from_matrix(R).as_euler("XYZ", degrees=True)
@@ -113,26 +123,23 @@ print(np.round(R_vis,1))
 print(t)
     
 
-pcl_folder = "C:/Users\SI042101\ETH\Master_Thesis\Data\PyData/20230110_165007\PCL"
+depth = cv2.imread(os.path.join(depth_folder, depth_list[i]),-1).astype(np.float32)*0.001
+pts = deprojectPoints(depth, K_d)
+pts2 = deprojectPoints(depth, mtx)
 
-pcl_list = os.listdir(pcl_folder)
+pcl = o3d.geometry.PointCloud()
+pcl2 = o3d.geometry.PointCloud()
 
-pcls=[]
-for i,name in enumerate(pcl_list[:1]):
-    pcl_path = os.path.join(pcl_folder, name)
-    pcl = o3d.io.read_point_cloud(pcl_path)
-    
-    R_2  =  pcl.get_rotation_matrix_from_xyz((np.pi, 0, 0))
-    pcl.rotate(R_2, center=(0,0,0))
-    pcl.translate(t)
-    pcl.rotate(R)
-    
-    pcls.append(pcl)
+pcl.points = o3d.utility.Vector3dVector(pts)
+pcl2.points = o3d.utility.Vector3dVector(pts2)
 
+pcl.paint_uniform_color([1,0,0])
+pcl2.paint_uniform_color([1,1,0])
+
+pcl.transform(T)
 
 origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1, origin=np.array([0., 0., 0.]))
-pcls.append(origin)
-o3d.visualization.draw_geometries(pcls)
+o3d.visualization.draw_geometries([origin,pcl, pcl2])
 
 
 

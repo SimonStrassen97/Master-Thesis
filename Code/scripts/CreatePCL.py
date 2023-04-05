@@ -16,7 +16,8 @@ import cv2
 import matplotlib.pyplot as plt
 import scipy.optimize
 
-from utils.general import OffsetParameters, PCLConfigs, StreamConfigs
+from utils.general import StreamConfigs, PCLConfigs, StreamConfigs, OffsetParameters
+from utils.general import loadIntrinsics 
 from utils.point_cloud_operations2 import PointCloud
 from utils.camera_operations import StereoCamera
 from utils.worktable_operations import Object, Worktable
@@ -24,61 +25,83 @@ from utils.worktable_operations import Object, Worktable
 
 # from pcls
 
-path = "/home/simonst/github/Datasets/wt/20230227_174221"
+
+cp = "/home/simonst/github/sparse-to-dense/results/wt.sparsifier=None.samples=0.modality=rgbd.arch=resnet18.decoder=deconv2.criterion=l1.lr=0.01.bs=4.pretrained=True/checkpoint-99.pth.tar"
+path = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230227_174221"
 
 
+cam_offset = OffsetParameters(r_z_cam=-18, y_cam=22, x_cam=55)
+pcl_configs = PCLConfigs(outliers=False, 
+                         voxel_size=0.001, 
+                         n_images=10,
+                         hp_radius=500,
+                         angle_thresh=0,
+                         std_ratio=10,
+                         # registration_method=None,
+                         )
 
-cam_offset = OffsetParameters(y_cam=25)
+_,K,_ = loadIntrinsics()
 
-pcl_configs = PCLConfigs(voxel_size=0.005,
-                          depth_thresh=1,
-                          vis=False,
-                          # color="gray",
-                          n_images=2,
-                          outliers=False,
-                          hp_radius=75,
-                          angle_thresh=95,
-                          std_ratio=1,
-                          nb_points=10,
-                          outlier_radius=0.01,
-                          recon_method="poisson",
-                          registration_method="",
-                          registration_radius=0.003,
-                          coord_scale=0.1
-                          )
+# depth = cv2.imread(os.path.join(path, "depth", "0001_depth.png"), -1)
+# out_size = (240,424)
+# depth_, K_ = ResizeViaProjection(depth, K, out_size)
+
+# inter = cv2.resize(depth, out_size[::-1], cv2.INTER_NEAREST)
+
+
+# fig, ax = plt.subplots(1,2)
+# ax[0].imshow(inter)
+# ax[1].imshow(depth_)
+
 
 
 pcl = PointCloud(pcl_configs, cam_offset)
-pcl.load_PCL(path)
+# pcl2 = PointCloud(pcl_configs, cam_offset)
+
+
+pcl.load_PCL_from_depth(path, K) 
+# pcl2.load_PCL_from_depth(path,K,run_s2d=cp)
+
+
 pcl.ProcessPCL()
+# pcl2.ProcessPCL()
 
-pcl.visualize(pcl.unified_pcl, outliers=False, coord_scale=0.3)
 
+# def custom_draw(pcd):
+    
+#     def rotate(vis):
+#         ctr = vis.get_view_control()
+#         ctr.rotate(1,0)
+#         return False
+    
+#     o3d.visualization.draw_geometries_with_animation_callback([pcd], rotate)
 
-p = pcl.unified_pcl
-pts = np.asarray(p.points)
+# custom_draw(pcl.unified_pcl)
+
+# p = pcl.unified_pcl
+# pts = np.asarray(p.points)
 
 
 
          
-# gridified wt
+# # gridified wt
    
-wt = Worktable()
-wt.gridify_wt(pts)
-wt.visualize()
+# wt = Worktable()
+# wt.gridify_wt(pts)
+# wt.visualize()
 
 
 
 
 
-pts = np.asarray(p.points)
-normals = np.asarray(p.normals)
-labels = np.zeros((len(pts),1))
+# pts = np.asarray(p.points)
+# normals = np.asarray(p.normals)
+# labels = np.zeros((len(pts),1))
 
-output = np.hstack([pts, normals, labels])
-out_path = os.path.join(path, "pcl_out.txt")
+# output = np.hstack([pts, normals, labels])
+# out_path = os.path.join(path, "pcl_out.txt")
 
-np.savetxt(out_path, output)
+# np.savetxt(out_path, output)
 
 ##############
 

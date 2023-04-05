@@ -35,12 +35,12 @@ class ConfigBase:
         return ret
     
     
-@dataclass
-class ParameterConfigs(ConfigBase):
-    vis: bool = False
-    method: str = "ransac"
-    matcher: str = "flann"
-    feature: str = "sift"
+# @dataclass
+# class ParameterConfigs(ConfigBase):
+#     vis: bool = False
+#     method: str = "ransac"
+#     matcher: str = "flann"
+#     feature: str = "sift"
     
     
 @dataclass
@@ -121,7 +121,6 @@ class OffsetParameters(ConfigBase):
     r_x_cam: float = 0
     r_y_cam: float = 49
     r_z_cam: float = 0
-    
   
     # Offset parameters between RGA coordinates and World (WT) coordinates (in world coords)
     
@@ -131,7 +130,20 @@ class OffsetParameters(ConfigBase):
     z_arm: float = 341.75
     
     
+@dataclass
+class CalibParams(ConfigBase):
+    # Offset parameters between Camera and reference pin's tip in world coordinates (
+
+    # mm
+    x: float = 63.33
+    y: float = 9
+    z: float = 86.16
     
+    # deg
+    r_x: float = 0
+    r_y: float = 50
+    r_z: float = 0
+        
     
 
 def detectBlurryImgs(path, thresh=30, delete=True):
@@ -360,15 +372,16 @@ def _getIntrinsicMatrix(intrinsics):
     c = intrinsics.get("color")
     d = intrinsics.get("depth")
     
-    
-    crop_offset = 8
-    K = np.array([[c.get("fx"), 0, c.get("cx")-crop_offset],
+    K_c = np.array([[c.get("fx"), 0, c.get("cx")],
                          [0 , c.get("fy"), c.get("cy")],
                          [0 , 0 , 1]
                          ])
     
-   
-    return K
+    K_d = np.array([[d.get("fx"), 0, d.get("cx")],
+                         [0 , d.get("fy"), d.get("cy")],
+                         [0 , 0 , 1]
+                         ])
+    return K_c, K_d
 
 def loadIntrinsics(file=None):
     
@@ -378,8 +391,9 @@ def loadIntrinsics(file=None):
     with open(file, "rb") as f:
         intrinsics = pickle.load(f)
     
-    K = _getIntrinsicMatrix(intrinsics)
+    K_c, K_d = _getIntrinsicMatrix(intrinsics)
 
-    return K, intrinsics
+
+    return K_d, K_c, intrinsics
   
 
