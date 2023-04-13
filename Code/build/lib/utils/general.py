@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 import os
 import shutil
+import pickle
 
 
 from dataclasses import dataclass
@@ -81,16 +82,16 @@ class PCLConfigs(ConfigBase):
     # filters
     hp_radius: float = 75
     angle_thresh: float = 95
-    std_ratio: float = 0.5
+    std_ratio: float = 1
     
-    nb_points: int = 20 
-    outlier_radius: float = 0.1
+    nb_points: int = 10
+    outlier_radius: float = 0.01
     # mesh
     recon_method: str = "poisson"
     
     # registration
     registration_method: str = "plane"
-    registration_radius: float = 0.005 
+    registration_radius: float = 0.003
     
     # registration_method: str = "color"
     # registration_radius: float = 0.05
@@ -99,11 +100,11 @@ class PCLConfigs(ConfigBase):
     # vis
     vis: bool = True
     coord_frame: bool = True
-    coord_scale: float = 1
+    coord_scale: float = 0.1
     outliers: bool = True
     color: str = None
     
-    n_images: int = 0
+    n_images: int = 8
     
     
 @dataclass
@@ -119,10 +120,9 @@ class OffsetParameters(ConfigBase):
     # deg
     r_x_cam: float = 0
     r_y_cam: float = 49
-    r_z_cam: float = -7
+    r_z_cam: float = 0
     
-    # Init move parameters in Arm coordinates
-    
+  
     # Offset parameters between RGA coordinates and World (WT) coordinates (in world coords)
     
     # mm
@@ -220,7 +220,88 @@ def createSnapshots(path, every_x_sec):
     
     return output_folder
 
-def ResizeWithAspectRatio(image, width = None, height = None, inter = cv2.INTER_AREA):
+
+def deprojectPoints(dmap, K, remove_zeros=True):
+
+        
+    R, C = np.indices(dmap.shape)
+    fx = K[0,0]
+    fy = K[1,1]
+    cy = K[0,2]
+    cx = K[1,2]
+
+    R = np.subtract(R, cx)
+    R = np.multiply(R, dmap)
+    R = np.divide(R, fx)
+
+    C = np.subtract(C, cy)
+    C = np.multiply(C, dmap)
+    C = np.divide(C, fy)
+    
+    # pts = np.column_stack((dmap.ravel()/scale, R.ravel(), -C.ravel()))
+    pts = np.column_stack((C.ravel(), R.ravel(), dmap.ravel()))
+    if remove_zeros:
+        pts = pts[pts[:,2]!=0]
+
+    return pts
+
+def projectPoints(pts, K, out_size):
+    
+    depth = np.zeros(out_size)
+    x,y,z = np.array_split(pts, 3, axis=1)
+    fx = K[0,0]
+    fy = K[1,1]
+    cy = K[0,2]
+    cx = K[1,2]
+    
+    R = np.multiply(y, fx)
+    R = np.divide(R, z)
+    R = np.add(R, cx)
+    
+    C = np.multiply(x, fy)
+    C = np.divide(C, z)
+    C = np.add(C, cy)
+    
+    R = np.round(R, 4)
+    C = np.round(C, 4)
+    
+    
+    r_mask = np.array([val.is_integer() for val in R.squeeze()])
+    c_mask = np.array([val.is_integer() for val in C.squeeze()])
+    mask = r_mask&c_mask
+    
+
+    R = R[mask].astype(int)
+    C = C[mask].astype(int)
+
+    z = z[mask]
+    
+    depth[R,C] = z
+    
+    return depth
+
+
+def ResizeViaProjection(depth, K, out_size):
+
+    
+    pts = deprojectPoints(depth, K)
+    
+    size = depth.shape
+    ratio = (out_size[0]/size[0], out_size[1]/size[1])
+    
+    K_new = K.copy()
+    K_new[0] *= ratio[0]
+    K_new[1] *= ratio[1]
+    
+    depth = projectPoints(pts, K_new, out_size)
+    
+    return depth, K_new
+    
+    
+    
+
+
+def ResizeWithAspectRatio(image, width = None, height = None, inter = cv2.INTER_NEAREST):
     """
     Selecting either a width or hight automatically adjusts the other variable to maintain
     the aspect ratio.
@@ -238,6 +319,7 @@ def ResizeWithAspectRatio(image, width = None, height = None, inter = cv2.INTER_
 
     """
     dim = None
+    r = 1 
     (h, w) = image.shape[:2]
 
     if width is None and height is None:
@@ -249,8 +331,55 @@ def ResizeWithAspectRatio(image, width = None, height = None, inter = cv2.INTER_
         r = width / float(w)
         dim = (width, int(h * r))
 
-    return cv2.resize(image, dim, interpolation = inter)
+    return cv2.resize(image, dim, interpolation = inter), r
 
+def Crop(img, output_size):
+    """Get parameters for ``crop`` for center crop.
+
+    Args:
+        img (numpy.ndarray (C x H x W)): Image to be cropped.
+        output_size (tuple): Expected output size of the crop.
+
+    Returns:
+        tuple: params (i, j, h, w) to be passed to ``crop`` for center crop.
+    """
+    h = img.shape[0]
+    w = img.shape[1]
+    th, tw = output_size
+    i = int(round((h - th) / 2.))
+    j = int(round((w - tw) / 2.))
+
+    if img.ndim == 3:
+        return img[i:i+th, j:j+tw, :]
+    elif img.ndim == 2:
+        return img[i:i + th, j:j + tw]
+ 
+
+def _getIntrinsicMatrix(intrinsics):
+    
+    c = intrinsics.get("color")
+    d = intrinsics.get("depth")
     
     
+    crop_offset = 8
+    K = np.array([[c.get("fx"), 0, c.get("cx")-crop_offset],
+                         [0 , c.get("fy"), c.get("cy")],
+                         [0 , 0 , 1]
+                         ])
     
+   
+    return K
+
+def loadIntrinsics(file=None):
+    
+    if not file:
+        file = "./intrinsics.pkl"
+        
+    with open(file, "rb") as f:
+        intrinsics = pickle.load(f)
+    
+    K = _getIntrinsicMatrix(intrinsics)
+
+    return K, intrinsics
+  
+

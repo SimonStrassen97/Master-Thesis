@@ -20,7 +20,7 @@ import pickle
 
 import open3d as o3d
 
-import utils.dpt_monodepth as dpt
+# import utils.dpt_monodepth as dpt
 
 
 
@@ -178,15 +178,15 @@ class StereoCamera():
         if ret:
             return color_img, depth_img
         
-    def run_dpt(self, input_folder, output_folder, weights_path, model_type="dpt_hybrid_nyu", optimize=True, absolute_depth=False):
+    # def run_dpt(self, input_folder, output_folder, weights_path, model_type="dpt_hybrid_nyu", optimize=True, absolute_depth=False):
         
-        for name in os.listdir(input_folder):
+    #     for name in os.listdir(input_folder):
             
-            img = cv2.imread(os.path.join(input_folder, name))
-            # depth = cv2.imread(os.path.join(output_folder, f"{orig[:-4]}.png"))
-            # rect_img = cam.undistort(img)
+    #         img = cv2.imread(os.path.join(input_folder, name))
+    #         # depth = cv2.imread(os.path.join(output_folder, f"{orig[:-4]}.png"))
+    #         # rect_img = cam.undistort(img)
             
-            depth = dpt.run(img, name, output_folder, weights_path, model_type=model_type, absolute_depth=absolute_depth)
+    #         depth = dpt.run(img, name, output_folder, weights_path, model_type=model_type, absolute_depth=absolute_depth)
             
             
            

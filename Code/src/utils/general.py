@@ -80,6 +80,7 @@ class PCLConfigs(ConfigBase):
     border_z: tuple = (-0.02, 0.5)
     
     # filters
+    filters: bool = True
     hp_radius: float = 75
     angle_thresh: float = 95
     std_ratio: float = 1
@@ -112,9 +113,9 @@ class OffsetParameters(ConfigBase):
     # Offset parameters between Camera and RGA coordinates in Arm coordinates (in arm coords)
 
     # mm
-    x_cam: float = 65
-    y_cam: float = 25
-    z_cam: float = 25
+    x_cam: float = 63.33
+    y_cam: float = 9
+    z_cam: float = 0
     
     
     # deg

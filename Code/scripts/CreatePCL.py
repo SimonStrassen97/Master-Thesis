@@ -6,6 +6,12 @@ Created on Thu Dec 29 11:34:48 2022
 """
 
 
+import sys
+path_to_model = '/home/simonst/github/PENet'
+if path_to_model not in sys.path:
+    sys.path.append(path_to_model)
+    
+    
 import time
 import os
 
@@ -21,23 +27,26 @@ from utils.general import loadIntrinsics
 from utils.point_cloud_operations2 import PointCloud
 from utils.camera_operations import StereoCamera
 from utils.worktable_operations import Object, Worktable
+
+
+
 # import pyransac3d as pyrsc
 
 # from pcls
 
 
-cp = "/home/simonst/github/sparse-to-dense/results/wt.sparsifier=None.samples=0.modality=rgbd.arch=resnet18.decoder=deconv2.criterion=l1.lr=0.01.bs=4.pretrained=True/checkpoint-99.pth.tar"
-path = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230227_174221"
+cp = "/home/simonst/github/results/pe_train/checkpoint-149.pth.tar"
+path = "/home/simonst/github/Datasets/wt/raw/20230227_181401/"
 
-
-cam_offset = OffsetParameters(r_z_cam=-18, y_cam=22, x_cam=55)
+cam_offset = OffsetParameters(r_z_cam=-30)
 pcl_configs = PCLConfigs(outliers=False, 
                          voxel_size=0.001, 
-                         n_images=10,
+                         n_images=4,
                          hp_radius=500,
                          angle_thresh=0,
                          std_ratio=10,
-                         # registration_method=None,
+                         registration_method=None,
+                         filters=False,
                          )
 
 _,K,_ = loadIntrinsics()
@@ -56,15 +65,15 @@ _,K,_ = loadIntrinsics()
 
 
 pcl = PointCloud(pcl_configs, cam_offset)
-# pcl2 = PointCloud(pcl_configs, cam_offset)
+pcl2 = PointCloud(pcl_configs, cam_offset)
 
 
-pcl.load_PCL_from_depth(path, K) 
-# pcl2.load_PCL_from_depth(path,K,run_s2d=cp)
+# pcl.load_PCL_from_depth(path, K) 
+pcl2.load_PCL_from_depth(path,K,run_s2d=cp)
 
 
-pcl.ProcessPCL()
-# pcl2.ProcessPCL()
+# pcl.ProcessPCL()
+pcl2.ProcessPCL()
 
 
 # def custom_draw(pcd):

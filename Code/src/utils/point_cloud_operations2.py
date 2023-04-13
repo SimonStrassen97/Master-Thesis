@@ -15,6 +15,10 @@ import torch
 
 from scipy.spatial.transform import Rotation as Rot
 from utils.general import ResizeWithAspectRatio, Crop, projectPoints, deprojectPoints, ResizeViaProjection
+
+from model import PENet_C2
+from CoordConv import AddCoordsNp
+from dataloaders.transforms import ToTensor
 torch.cuda.empty_cache()
 
 
@@ -56,7 +60,8 @@ class PointCloud():
             # o3d.visualization.draw_geometries([self.pcl, origin])
             
             self.CamToArm()
-            self.CleanUpPCL()
+            if self.configs.filters:
+                self.CleanUpPCL()
            
             self.pcls.append(self.pcl)
             self.registration()
@@ -335,9 +340,19 @@ class PointCloud():
         
         if self.configs.n_images:
             idx = np.linspace(0, len(dfiles) - 1, self.configs.n_images).astype(int)
+         
+        if run_s2d:
+            torch.cuda.empty_cache()
+            checkpoint = torch.load(run_s2d, map_location="cpu")
+            args = checkpoint["args"]
+            args.cpu =  True
+            self.model = PENet_C2(args)
+            self.model.load_state_dict(checkpoint['model'], strict=False) 
+            self.model.eval()
+            self.model.to("cpu")
             
             
-        for i in idx:
+        for ii, i in enumerate(idx):
             dpath = os.path.join(depth_folder, dfiles[i])
             ipath = os.path.join(img_folder, ifiles[i])
             
@@ -348,17 +363,22 @@ class PointCloud():
             depth = depth.astype(np.float32) * depth_scale
           
             if run_s2d:
-                checkpoint = torch.load(run_s2d) 
-                model = checkpoint["model"]
-                model.eval()
-                inp, img, depth, K = self._prepareS2Dinput(img, depth, K)
-                pred = model(inp)
+                print(f"Sparse to dense: {ii+1}/{len(idx)}")
+                inp = self._prepareS2Dinput(img, depth, K)
+                K = inp["K"].squeeze().numpy()
+                img = inp["rgb"].squeeze().numpy().transpose(1,2,0) * 255
+                depth = inp["d"].squeeze().numpy()
+                pred = self.model(inp)
                 pred = pred.detach().cpu().squeeze().numpy()
-                depth[depth==0] = pred[depth==0]
+                filled = depth.copy()
+                filled[depth==0] = pred[depth==0]
             
             
                 
-            self.pcl_ = self.calc_pcl(img, depth, K)
+            self.pcl_ = self.calc_pcl(img, pred, K)
+            # pcl1 = self.calc_pcl(img_new, d_new, K_new)
+            # pcl2 = self.calc_pcl(img_new, pred, K_new)
+            # pcl3 = self.calc_pcl(img_new, test, K_new)
             # o3d.visualization.draw_geometries([self.pcl_])
             # self.pcl_ = pcl.voxel_down_sample(voxel_size=self.configs.voxel_size)
             
@@ -391,7 +411,7 @@ class PointCloud():
     
     def _prepareS2Dinput(self, img, depth, K):
         
-        crop_size = (228, 304)
+        crop_size = (224, 416)
         img, ratio = ResizeWithAspectRatio(img, height=240)
         # depth_, _ = ResizeWithAspectRatio(depth, height=240)
         depth, K_new = ResizeViaProjection(depth, K, out_size=(240,424))
@@ -405,10 +425,23 @@ class PointCloud():
         depth = Crop(depth, crop_size)
         rgb = np.asfarray(img, dtype='float32') / 255
         depth = np.asfarray(depth, dtype="float32")
-        rgbd = np.append(rgb, np.expand_dims(depth, axis=2), axis=2)
-        rgbd = torch.from_numpy(rgbd.transpose((2, 0, 1)).copy())
+        depth = np.expand_dims(depth, -1)        
+
+        position = AddCoordsNp(224, 416)
+        position = position.call()
+        
+        candidates = {"rgb": rgb, "d": depth, "gt": depth, \
+                      'position': position, 'K': K_new}
+        
+        to_tensor = ToTensor()
+        to_float_tensor = lambda x: to_tensor(x).float()
+
+        items = {
+            key: to_float_tensor(val).unsqueeze(0)
+            for key, val in candidates.items() if val is not None
+        }
      
-        return rgbd.unsqueeze(0).cuda(), img, depth, K_new
+        return items
         
         
     def _limitDepth(self):

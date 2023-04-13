@@ -14,7 +14,9 @@ import cv2
 import torch
 
 from scipy.spatial.transform import Rotation as Rot
-from utils.general import ResizeWithAspectRatio
+from utils.general import ResizeWithAspectRatio, Crop, projectPoints, deprojectPoints, ResizeViaProjection
+torch.cuda.empty_cache()
+
 
 
 class PointCloud():
@@ -50,8 +52,12 @@ class PointCloud():
             self.idx = self.idx_list[i]
             self.pcl = copy.deepcopy(pcl)
             
+            # origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1, origin=np.array([0., 0., 0.]))
+            # o3d.visualization.draw_geometries([self.pcl, origin])
+            
             self.CamToArm()
             self.CleanUpPCL()
+           
             self.pcls.append(self.pcl)
             self.registration()
             
@@ -121,6 +127,7 @@ class PointCloud():
         T_z = -(offset_z + self.pose_data[self.idx, 7])/1000
         T = (T_x, T_y, T_z)
         self.pcl.translate(T)
+        aa = 0 
         
         
         
@@ -131,6 +138,7 @@ class PointCloud():
         outlier_cloud += self._removeHiddenPts()
         outlier_cloud += self._removeInfeasablePts()
         outlier_cloud += self._removeOutliers()
+
 
         
         self.outliers.append(outlier_cloud)
@@ -287,12 +295,13 @@ class PointCloud():
             self.pose_data = pd.read_csv(f).to_numpy()
         
 
-    def loadPCL(self, path):
+    def load_PCL(self, path):
         
         self.loadPoseData(path)
         
         pcl_folder = os.path.join(path, "PCL")
         files = os.listdir(pcl_folder)
+        files.sort()
         
         if self.configs.n_images:
             idx = np.linspace(0, len(files) - 1, self.configs.n_images).astype(int)
@@ -311,15 +320,17 @@ class PointCloud():
             self.pcls_.append(self.pcl_)
             
     
-    def loadPCLfromDepth(self, path, K, depth_scale, run_s2d=""):
+    def load_PCL_from_depth(self, path, K, depth_scale=0.0001, run_s2d=""):
         
         self.loadPoseData(path)
         
         depth_folder = os.path.join(path, "depth")
         dfiles = os.listdir(depth_folder)
+        dfiles.sort()
         
         img_folder = os.path.join(path, "img")
         ifiles = os.listdir(img_folder)
+        ifiles.sort()
         
         
         if self.configs.n_images:
@@ -332,39 +343,72 @@ class PointCloud():
             
             depth = cv2.imread(dpath,-1)
             img = cv2.imread(ipath, -1)
+            img = img[...,::-1]
             
+            depth = depth.astype(np.float32) * depth_scale
+          
             if run_s2d:
-                checkpoint = torch.load(run_s2d)
+                checkpoint = torch.load(run_s2d) 
                 model = checkpoint["model"]
                 model.eval()
-                inp = self._prepareS2Dinput(img, depth)
+                inp, img, depth, K = self._prepareS2Dinput(img, depth, K)
                 pred = model(inp)
-                pred = pred.detach().cpu().numpy()
+                pred = pred.detach().cpu().squeeze().numpy()
+                depth[depth==0] = pred[depth==0]
+            
+            
                 
+            self.pcl_ = self.calc_pcl(img, depth, K)
+            # o3d.visualization.draw_geometries([self.pcl_])
+            # self.pcl_ = pcl.voxel_down_sample(voxel_size=self.configs.voxel_size)
             
-            pcl_ = self.pcl_from_depth(img, depth, K)
+            # self._PCLToCam()
             self._limitDepth()
-            
-            
+                  
             self.idx_list.append(int(os.path.basename(dpath).split("_")[0]))  
-            self.pcls_.append(pcl_)
+            self.pcls_.append(self.pcl_)
             self.imgs.append(img)
             self.depths.append(depth)
             
-    def _prepareS2Dinput(self, img, depth):
+    def calc_pcl(self, img, depth, K):
+    #bacically this is a vectorized version of depthToPointCloudPos()
+    
+        pts = deprojectPoints(depth, K, remove_zeros=False)
+        colors = np.column_stack((img[:,:,0].ravel(), img[:,:,1].ravel(), img[:,:,2].ravel()))
+        
+        pcl_ = o3d.geometry.PointCloud()
+        pcl_.points = o3d.utility.Vector3dVector(pts)
+        pcl_.colors = o3d.utility.Vector3dVector(colors/255)
         
         
-        rgb = ResizeWithAspectRatio(img, height=240)
-        depth = ResizeWithAspectRatio(depth, height=240)
-        rgb = np.asfarray(rgb, dtype='float') / 255
-        depth = np.asfarray(depth, dtype="float") * 0.0001
+        points = np.asarray(pcl_.points)
+        condition = points[:,2]!=0
+        ind = np.where(condition)[0]
+        pcl_ = pcl_.select_by_index(ind)
+        
+        return pcl_
+    
+    
+    def _prepareS2Dinput(self, img, depth, K):
+        
+        crop_size = (224, 416)
+        img, ratio = ResizeWithAspectRatio(img, height=240)
+        # depth_, _ = ResizeWithAspectRatio(depth, height=240)
+        depth, K_new = ResizeViaProjection(depth, K, out_size=(240,424))
+        
+        cur_size = img.shape
+        diff = (cur_size[0]-crop_size[0], cur_size[1]-crop_size[1])
+        K_new[0,2] -= diff[1]/2
+        K_new[1,2] -= diff[0]/2
+        
+        img = Crop(img, crop_size)
+        depth = Crop(depth, crop_size)
+        rgb = np.asfarray(img, dtype='float32') / 255
+        depth = np.asfarray(depth, dtype="float32")
         rgbd = np.append(rgb, np.expand_dims(depth, axis=2), axis=2)
-        if rgbd.ndim == 3:
-            rgbd = torch.from_numpy(rgbd.transpose((2, 0, 1)).copy())
-        elif rgbd.ndim == 2:
-            rgbd = torch.from_numpy(rgbd.copy())
-        
-        return rgbd.cuda()
+        rgbd = torch.from_numpy(rgbd.transpose((2, 0, 1)).copy())
+     
+        return rgbd.unsqueeze(0).cuda(), img, depth, K_new
         
         
     def _limitDepth(self):
@@ -375,37 +419,8 @@ class PointCloud():
             condition = points[:,2] < self.configs.depth_thresh
             ind = np.where(condition)[0]
             self.pcl_ = self.pcl_.select_by_index(ind)
-            
         
-        
-    def pcl_from_depth(self, img, dmap, K, scale=1, depth_scale=1):
-    #bacically this is a vectorized version of depthToPointCloudPos()
-    
-        
-        R, C = np.indices(dmap.shape)
-        fx = K[0,0]
-        fy = K[1,1]
-        cy = K[0,2]
-        cx = K[1,2]
-    
-        R = np.subtract(R, cx)
-        R = np.multiply(R, dmap)
-        R = np.divide(R, fx * scale)
-    
-        C = np.subtract(C, cy)
-        C = np.multiply(C, dmap)
-        C = np.divide(C, fy * scale)
-        
-        # pts = np.column_stack((dmap.ravel()/scale, R.ravel(), -C.ravel()))
-        pts = np.column_stack((C.ravel(), R.ravel(), dmap.ravel()/scale ))
-
-        colors = np.column_stack((img[:,:,0].ravel(), img[:,:,1].ravel(), img[:,:,2].ravel()))
-        
-        self.pcl_.points = o3d.utility.Vector3dVector(pts)
-        self.pcl_.colors = o3d.utility.Vector3dVector(colors/255)
-        
-        return self.pcl_
-        
+                
 
     def visualize(self, pcl_in, coord_frame=True, coord_scale=1, outliers=True, color=None):
         
