@@ -16,7 +16,7 @@ import copy
 import cv2
 import matplotlib.pyplot as plt
 import scipy.optimize
-import skimage.exposure
+from skimage.exposure import rescale_intensity
 from numpy.random import default_rng
 
 
@@ -85,7 +85,7 @@ def d2s_spots(depth, thresh=175):
     blur = cv2.GaussianBlur(noise, (0,0), sigmaX=15, sigmaY=15, borderType = cv2.BORDER_DEFAULT)
     
     # stretch the blurred image to full dynamic range
-    stretch = skimage.exposure.rescale_intensity(blur, in_range='image', out_range=(0,255)).astype(np.uint8)
+    stretch = rescale_intensity(blur, in_range='image', out_range=(0,255)).astype(np.uint8)
     
     # threshold stretched image to control the size
     thresh = cv2.threshold(stretch, thresh, 255, cv2.THRESH_BINARY)[1]

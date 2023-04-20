@@ -64,12 +64,12 @@ class PointCloud():
                 self.CleanUpPCL()
            
             self.pcls.append(self.pcl)
-            self.registration()
+            # self.registration()
             
             self.unified_pcl += self.pcl
         
             
-        self.unified_pcl = self.unified_pcl.voxel_down_sample(voxel_size=self.configs.voxel_size)
+        # self.unified_pcl = self.unified_pcl.voxel_down_sample(voxel_size=self.configs.voxel_size)
         self.ArmToWorld()
         # self.unified_pcl = self.unified_pcl.uniform_down_sample(4)
             
@@ -361,21 +361,22 @@ class PointCloud():
             img = img[...,::-1]
             
             depth = depth.astype(np.float32) * depth_scale
+            K_new = K.copy()
           
             if run_s2d:
                 print(f"Sparse to dense: {ii+1}/{len(idx)}")
                 inp = self._prepareS2Dinput(img, depth, K)
-                K = inp["K"].squeeze().numpy()
+                K_new = inp["K"].squeeze().numpy()
                 img = inp["rgb"].squeeze().numpy().transpose(1,2,0) * 255
                 depth = inp["d"].squeeze().numpy()
                 pred = self.model(inp)
                 pred = pred.detach().cpu().squeeze().numpy()
-                filled = depth.copy()
-                filled[depth==0] = pred[depth==0]
-            
+                # filled = depth.copy()
+                depth[depth==0] = pred[depth==0]
+                
             
                 
-            self.pcl_ = self.calc_pcl(img, pred, K)
+            self.pcl_ = self.calc_pcl(img, depth, K_new)
             # pcl1 = self.calc_pcl(img_new, d_new, K_new)
             # pcl2 = self.calc_pcl(img_new, pred, K_new)
             # pcl3 = self.calc_pcl(img_new, test, K_new)

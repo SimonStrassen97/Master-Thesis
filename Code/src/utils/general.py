@@ -11,6 +11,8 @@ import numpy as np
 import os
 import shutil
 import pickle
+import json
+import torch
 
 
 from dataclasses import dataclass
@@ -54,14 +56,25 @@ class StreamConfigs(ConfigBase):
     d_fps: str = 30
     
     
+    # c_hfov: int = 1280
+    # c_vfov: int = 720
+    # c_fps: str = 30
+    
+    # d_hfov: int = 1280
+    # d_vfov: int = 720
+    # d_fps: str = 30
+    
+    
+    
+    
 @dataclass
 class AxisConfigs(ConfigBase):
+    
     x_max: float = 650
     y_max: float = 475
     z_max: float = 125
     r_max: float = 360
-    
-    n_images: int = 50
+
 
     # output_dir: str = "C:\\Users\SI042101\ETH\Master_Thesis\PyData"
     
@@ -75,12 +88,11 @@ class PCLConfigs(ConfigBase):
     
     # CleanUp
     # m
-    border_x: tuple = (-0.0, 0.700)
+    border_x: tuple = (0.0, 0.700)
     border_y: tuple = (-0.01, 0.600)
-    border_z: tuple = (-0.02, 0.5)
+    border_z: tuple = (-0.01, 0.5)
     
     # filters
-    filters: bool = True
     hp_radius: float = 75
     angle_thresh: float = 95
     std_ratio: float = 1
@@ -113,14 +125,14 @@ class OffsetParameters(ConfigBase):
     # Offset parameters between Camera and RGA coordinates in Arm coordinates (in arm coords)
 
     # mm
-    x_cam: float = 63.33
-    y_cam: float = 9
-    z_cam: float = 0
+    x_cam: float = 65
+    y_cam: float = 25
+    z_cam: float = 25
     
     
     # deg
     r_x_cam: float = 0
-    r_y_cam: float = 49
+    r_y_cam: float = 50
     r_z_cam: float = 0
   
     # Offset parameters between RGA coordinates and World (WT) coordinates (in world coords)
@@ -136,14 +148,22 @@ class CalibParams(ConfigBase):
     # Offset parameters between Camera and reference pin's tip in world coordinates (
 
     # mm
-    x: float = 63.33
-    y: float = 9
-    z: float = 86.16
+    x_pin2cam: float = 63.33
+    y_pin2cam: float = 9
+    z_pin2cam: float = 86.16
     
     # deg
-    r_x: float = 0
-    r_y: float = 50
-    r_z: float = 0
+    r_x_pin2cam: float = 0
+    r_y_pin2cam: float = 50
+    r_z_pin2cam: float = 0
+    
+    x_world2ref: float = 83.0
+    y_world2ref: float = 325.0
+    z_world2ref: float = 0
+    
+    r_x_world2ref: float = 0.0
+    r_y_world2ref: float = 0.0
+    r_z_world2_ref: float = 0.0
         
     
 
@@ -384,17 +404,51 @@ def _getIntrinsicMatrix(intrinsics):
                          ])
     return K_c, K_d
 
-def loadIntrinsics(file=None):
+def loadIntrinsics(path=None):
     
-    if not file:
-        file = "./intrinsics.pkl"
+
+    if not path: 
+        path ="."
+    try:
         
-    with open(file, "rb") as f:
-        intrinsics = pickle.load(f)
+    
+        file = os.path.join(path, "intrinsics.txt")
+            
+        with open(file, "r") as f:
+            intrinsics = json.load(f)
+            
+    except:
+        
+        file = os.path.join(path, "intrinsics.pkl")
+            
+        with open(file, "rb") as f:
+            intrinsics = pickle.load(f)
+    
     
     K_c, K_d = _getIntrinsicMatrix(intrinsics)
 
 
     return K_d, K_c, intrinsics
   
-
+def prepare_s2d_input(img, depth, K):
+    
+    crop_size = (228, 304)
+    img, ratio = ResizeWithAspectRatio(img, height=240)
+    # depth_, _ = ResizeWithAspectRatio(depth, height=240)
+    depth, K_new = ResizeViaProjection(depth, K, out_size=(240,424))
+    
+    cur_size = img.shape
+    diff = (cur_size[0]-crop_size[0], cur_size[1]-crop_size[1])
+    K_new[0,2] -= diff[1]/2
+    K_new[1,2] -= diff[0]/2
+    
+    img = Crop(img, crop_size)
+    depth = Crop(depth, crop_size)
+    rgb = np.asfarray(img, dtype='float32') / 255
+    depth = np.asfarray(depth, dtype="float32")
+    rgbd = np.append(rgb, np.expand_dims(depth, axis=2), axis=2)
+    rgbd = torch.from_numpy(rgbd.transpose((2, 0, 1)).copy())
+    
+    return rgbd.unsqueeze(0), img, depth, K_new
+    
+                                                                        

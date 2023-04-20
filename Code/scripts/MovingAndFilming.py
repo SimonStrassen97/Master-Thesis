@@ -11,6 +11,7 @@ import sys
 import time
 from datetime import datetime
 
+
 import cv2
 import numpy as np
 # import pandas as pd
@@ -21,26 +22,16 @@ import pyrealsense2 as rs
 
 from utils.camera_operations import StereoCamera
 from utils.axis_operations import AxisMover
-from utils.general import AxisConfigs, StreamConfigs
+from utils.general import AxisConfigs, StreamConfigs, CalibParams
 
 cv2.destroyAllWindows()
 
 
 CAMERA = True
-AXIS = False
+AXIS = True
 
-calibrate=True
-vis=True
+vis=False
 output_dir = "C:\\Users\SI042101\ETH\Master_Thesis\Data\PyData"
-
-time_string = datetime.now().strftime('%Y%m%d_%H%M%S')
-data_output_folder = os.path.join(output_dir, time_string)
-os.makedirs(data_output_folder)
-
-
-if calibrate ==True:
-    calibration_folder = os.path.join(data_output_folder, "calibration")
-    os.makedirs(calibration_folder)
 
 
 if AXIS:
@@ -59,6 +50,17 @@ if AXIS:
     CGA_x.Initialize()
     CGA_y.Initialize()
         
+
+configs = AxisConfigs()
+axis = AxisMover(CGA_x, CGA_y, CGA_z, CGA_r, configs)
+
+calib_params = CalibParams
+calibrated = axis.calibrate(calib_params, mode="r")
+
+time_string = datetime.now().strftime('%Y%m%d_%H%M%S')
+data_output_folder = os.path.join(output_dir, time_string)
+os.makedirs(data_output_folder)
+
 
 
 #########################################################
@@ -181,24 +183,19 @@ if AXIS:
     
 
 
-#####################################################3
-# data acquisition
+# #####################################################3
+# # data acquisition
 
 # Cam init
 if CAMERA:
-    stream_configs = StreamConfigs(c_hfov=848)
+    stream_configs = StreamConfigs()
     stereo_cam = StereoCamera(activate_adv=True)
-    stereo_cam.startStreaming(stream_configs)
+    stereo_cam.startStreaming(stream_configs, data_output_folder)
     
 
 # Mover init
-if AXIS:
-    configs = AxisConfigs(n_images=50)
-    axis = AxisMover(CGA_x, CGA_y, CGA_z, CGA_r, configs)
-
-
 checkpoints = np.array([(0,0,0,0), (0,-1,0,270),
-                          (-1,-1,0,180), (-1,0,0,90), (-1,0,40,90), (0,0,40,90)])
+                          (-1,-1,0,180), (-1,0,0,90), (-1,0,0,90), (0,0,0,90)])
 
 
 counter = 1
@@ -209,17 +206,19 @@ try:
         
         # calc next move and execute
         if AXIS:
-            done, target_pos, error = axis.MovePlanner(checkpoints, ret=True)
+            done, target, pos = axis.MovePlanner(checkpoints, ret=True)
             axis.saveData(data_output_folder)
+            axis.saveData_(data_output_folder, counter)
             counter = axis.move_counter
-                
+        
+        time.sleep(1)
         # take img
         if CAMERA:
-            color_img, depth_img = stereo_cam.getFrame(ret=True)
+            img, d, d_avg = stereo_cam.getFrame(ret=True)
             
             # saving imgs, pose data and pcl
             stereo_cam.saveImages(data_output_folder, counter-1)
-        # stereo_cam.1savePCL(data_output_folder, counter-1)
+        # stereo_cam.savePCL(data_output_folder, counter-1)
         
         counter += 1
         
@@ -227,9 +226,9 @@ try:
         
         # Show images
         if vis and CAMERA:
-            # images = np.hstack([color_img, depth_img])
+            # images = np.hstack([img, d])
             cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
-            cv2.imshow('RealSense', color_img)
+            cv2.imshow('RealSense', img)
         
         
             if cv2.waitKey(0) & 0xFF == ord('q'):
@@ -250,10 +249,4 @@ finally:
         cv2.destroyAllWindows()
         
 
-# mesh = o3d.io.read_triangle_mesh("C:/Users\SI042101\ETH\Master_Thesis\Data\PyData/20221221_155120\PCL\pcl_frame_51.ply")   
-# # pcl = o3d.io.read_point_cloud("C:/Users\SI042101\ETH\Master_Thesis\Data\PyData/20221221_145837\PCL\pcl_frame_1.ply")   
-# # mesh.compute_vertex_normals()
-  
-    
-# o3d.visualization.draw_geometries([mesh])
 

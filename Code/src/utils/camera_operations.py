@@ -94,7 +94,7 @@ class StereoCamera():
 
         
 
-    def startStreaming(self, stream_configs):
+    def startStreaming(self, stream_configs, output_path=None):
         self.config = rs.config()
         
         # Get device product line for setting a supporting resolution
@@ -131,77 +131,95 @@ class StereoCamera():
         
         
         self._getIntrinsics()
-        self.saveIntrinsics()        
+        self.saveIntrinsics(path=output_path)        
         
         
     def stopStreaming(self):
         
         self.pipeline.stop()
         
-    def getFrame(self, color=True, depth=True, ret=False):
+    def getFrame(self, n_imgs=10, color=True, depth=True, ret=False):
 
         # Wait for a coherent pair of frames: depth and color
-           
-        self.frames = self.pipeline.wait_for_frames()
-        
-        
-
-        # dec_filter = rs.decimation_filter ()       # Decimation - reduces depth frame density
-        d_to_disp = rs.disparity_transform(True)
-        spat_filter = rs.spatial_filter()          # Spatial    - edge-preserving spatial smoothing
-        temp_filter = rs.temporal_filter()
-        disp_to_d = rs.disparity_transform(False)
-        
-        
-        spat_filter.set_option(rs.option.holes_fill, 3)
-
-
-        depth_frame = self.frames.get_depth_frame()
-        color_frame = self.frames.get_color_frame()
-        
-        
-                
-        filtered = depth_frame
-        # filtered = dec_filter.process(filtered)
-        # filtered = d_to_disp.process(filtered)
-        filtered = spat_filter.process(filtered)
-        # filtered = disp_to_d.process(filtered)
-        
-        # filtered = temp_filter.process(filtered)
-        # disp units: 1/32
-        
-        
-        #####################
-        self.pcl = self.PCL.calculate(depth_frame)
-        self.PCL.map_to(color_frame)
          
-       
-        # Convert images to numpy arrays
+        depth_sum = None
         
-        depth_img = np.asanyarray(depth_frame.get_data())
-        color_img = np.asanyarray(color_frame.get_data())
-        # disp_img = np.asanyarray(disp_frame.get_data())
-        filtered = np.asanyarray(filtered.get_data())
-        # filtered_depth1 = np.asanyarray(filtered1.get_data())
+        for n in range(n_imgs):
+            self.frames = self.pipeline.wait_for_frames()
+            
+            
         
+
+            # dec_filter = rs.decimation_filter ()       # Decimation - reduces depth frame density
+            d_to_disp = rs.disparity_transform(True)
+            spat_filter = rs.spatial_filter()          # Spatial    - edge-preserving spatial smoothing
+            temp_filter = rs.temporal_filter()
+            disp_to_d = rs.disparity_transform(False)
+            
+            
+            spat_filter.set_option(rs.option.holes_fill, 3)
     
-        # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
-        # depth_img = cv2.applyColorMap(cv2.convertScaleAbs(depth_img, alpha=0.03), cv2.COLORMAP_JET)
-       
-        depth_dim = depth_img.shape
-        color_dim = color_img.shape
-       
-        # If depth and color resolutions are different, resize color image to match depth image for display
-        if depth_dim != color_dim:
-            color_img = cv2.resize(color_img, dsize=(depth_dim[1], depth_dim[0]), interpolation=cv2.INTER_AREA)
+    
+            depth_frame = self.frames.get_depth_frame()
+            color_frame = self.frames.get_color_frame()
+            
+            
+                    
+            filtered = depth_frame
+            # filtered = dec_filter.process(filtered)
+            # filtered = d_to_disp.process(filtered)
+            filtered = spat_filter.process(filtered)
+            # filtered = disp_to_d.process(filtered)
+            
+            # filtered = temp_filter.process(filtered)
+            # disp units: 1/32
+            
+            
+            #####################
+            # self.pcl = self.PCL.calculate(depth_frame)
+            # self.PCL.map_to(color_frame)
+             
+           
+            # Convert images to numpy arrays
+            
+            depth_img = np.asanyarray(depth_frame.get_data())
+            color_img = np.asanyarray(color_frame.get_data())
+            # disp_img = np.asanyarray(disp_frame.get_data())
+            filtered = np.asanyarray(filtered.get_data())
+            # filtered_depth1 = np.asanyarray(filtered1.get_data())
+            
         
+            # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
+            # depth_img_recolored = cv2.applyColorMap(cv2.convertScaleAbs(depth_img, alpha=0.03), cv2.COLORMAP_JET)
+           
+            depth_dim = depth_img.shape
+            color_dim = color_img.shape
+           
+            # If depth and color resolutions are different, resize color image to match depth image for display
+            if depth_dim != color_dim:
+                color_img = cv2.resize(color_img, dsize=(depth_dim[1], depth_dim[0]), interpolation=cv2.INTER_AREA)
+            
+            
+            mask = np.ceil(depth_img/depth_img.max())
+            
+            if n==0:
+                mask_sum = mask
+                depth_sum = depth_img.copy().astype(np.float64)
+            
+            else:
+                depth_sum += depth_img
+                mask_sum += mask
+            
+            
+        depth_avg = np.divide(depth_sum, mask_sum, where=(mask_sum!=0))
+            
         self.color_img = color_img
-        self.depth_img = depth_img
+        self.depth_img = depth_avg
         self.filtered_img = filtered
         # self.disp_img = disp_img
         
         if ret:
-            return color_img, depth_img
+            return color_img, depth_img, depth_avg
         
     # def run_dpt(self, input_folder, output_folder, weights_path, model_type="dpt_hybrid_nyu", optimize=True, absolute_depth=False):
         
@@ -296,7 +314,7 @@ class StereoCamera():
             f.write(json_file)
             
                
-    def saveIntrinsics(self, path=None):
+    def saveIntrinsics(self, path=None, mode="txt"):
         
         if not self.intrinsics:
             raise ValueError("Nothing to be saved...")
@@ -306,16 +324,30 @@ class StereoCamera():
             
         file = os.path.join(path, "intrinsics.pkl")
         
-        with open(file, "wb") as f:
-            pickle.dump(self.intrinsics, f)  
-    
+        if mode=="pkl":
+            with open(file, "wb") as f:
+                pickle.dump(self.intrinsics, f)  
+            
+        if mode=="txt":
+            with open("./intrinsics.txt", "w") as f:
+                json.dump(self.intrinsics, f, indent=4)
+        
+        else:
+            raise ValueError
+            
     def loadIntrinsics(self, file=None):
         
         if not file:
-            file = "./intrinsics.pkl"
+            file = "./intrinsics"
             
-        with open(file, "rb") as f:
-            self.intrinsics = pickle.load(f)
+        try:
+            with open(file+".txt", "r") as f:
+                self.intrinsics = json.load(f)
+                
+        except:
+            with open(file+".pkl", "rb") as f:
+                self.intrinsics = pickle.load(f)
+        
             
     def getIntrinsicMatrix(self):
         

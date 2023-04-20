@@ -6,12 +6,6 @@ Created on Thu Dec 29 11:34:48 2022
 """
 
 
-import sys
-path_to_model = '/home/simonst/github/PENet'
-if path_to_model not in sys.path:
-    sys.path.append(path_to_model)
-    
-    
 import time
 import os
 
@@ -24,58 +18,49 @@ import scipy.optimize
 
 from utils.general import StreamConfigs, PCLConfigs, StreamConfigs, OffsetParameters
 from utils.general import loadIntrinsics 
-from utils.point_cloud_operations2 import PointCloud
+from utils.point_cloud_operations import PointCloud
+from utils.point_cloud_operations2 import PointCloud2
+
 from utils.camera_operations import StereoCamera
 from utils.worktable_operations import Object, Worktable
-
-
-
 # import pyransac3d as pyrsc
 
 # from pcls
 
 
-cp = "/home/simonst/github/results/pe_train/checkpoint-149.pth.tar"
-path = "/home/simonst/github/Datasets/wt/raw/20230227_181401/"
+cp = "/home/simonst/github/sparse-to-dense/results/wt.sparsifier=None.samples=0.modality=rgbd.arch=resnet18.decoder=deconv2.criterion=l1.lr=0.01.bs=4.pretrained=True/checkpoint-99.pth.tar"
+path = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230417_174726"
+# path = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230417_174256"
 
-cam_offset = OffsetParameters(r_z_cam=-30)
+
+
 pcl_configs = PCLConfigs(outliers=False, 
                          voxel_size=0.001, 
-                         n_images=4,
-                         hp_radius=500,
+                         n_images=5,
+                         hp_radius=75,
                          angle_thresh=0,
                          std_ratio=10,
-                         registration_method=None,
-                         filters=False,
+                          registration_method="none",
                          )
 
+
+pcl = PointCloud(pcl_configs)
+
+
+pcd = pcl.create_multi_view_pcl(path)
+pcl.visualize(pcd, outliers=False)
+
+
+
+offset_params=OffsetParameters
 _,K,_ = loadIntrinsics()
+pcl2 = PointCloud2(pcl_configs, offset_params)
 
-# depth = cv2.imread(os.path.join(path, "depth", "0001_depth.png"), -1)
-# out_size = (240,424)
-# depth_, K_ = ResizeViaProjection(depth, K, out_size)
-
-# inter = cv2.resize(depth, out_size[::-1], cv2.INTER_NEAREST)
-
-
-# fig, ax = plt.subplots(1,2)
-# ax[0].imshow(inter)
-# ax[1].imshow(depth_)
-
-
-
-pcl = PointCloud(pcl_configs, cam_offset)
-pcl2 = PointCloud(pcl_configs, cam_offset)
-
-
-# pcl.load_PCL_from_depth(path, K) 
-pcl2.load_PCL_from_depth(path,K,run_s2d=cp)
-
-
-# pcl.ProcessPCL()
+pcl2.load_PCL_from_depth(path, K)
 pcl2.ProcessPCL()
 
-
+pcd.translate([1,0,0])
+o3d.visualization.draw_geometries([pcl2.unified_pcl, pcd])
 # def custom_draw(pcd):
     
 #     def rotate(vis):
