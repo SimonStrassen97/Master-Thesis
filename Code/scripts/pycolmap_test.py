@@ -15,8 +15,9 @@ img_dir = Path("/home/simonst/github/Datasets/wt/raw/20230227_181401/img/")
 
 if not os.path.exists(out):
     out.mkdir()
+
 mvs_path = out / "mvs"
-print(mvs_path)
+
 database_path = out / "database.db"
 
 # pycolmap.extract_features(database_path, img_dir)

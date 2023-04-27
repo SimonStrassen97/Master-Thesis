@@ -14,6 +14,7 @@ import torch
 import json
 
 from scipy.spatial.transform import Rotation as Rot
+from model import PENet_C2
 
 from utils.general import ResizeWithAspectRatio, Crop, ResizeViaProjection 
 from utils.general import projectPoints, deprojectPoints
@@ -84,6 +85,16 @@ class PointCloud():
         if not self.K:
             self._loadIntrinsics(path)
             
+        if run_s2d:
+            torch.cuda.empty_cache()
+            checkpoint = torch.load(run_s2d, map_location="cpu")
+            args = checkpoint["args"]
+            args.cpu =  True
+            self.model = PENet_C2(args)
+            self.model.load_state_dict(checkpoint['model'], strict=False) 
+            self.model.eval()
+            self.model.to("cpu")
+            
         dfiles, ifiles, data_files = self._get_file_names(path, n_images)
         
         for n, (d, i, dd) in enumerate(zip(dfiles, ifiles, data_files)):
@@ -97,7 +108,8 @@ class PointCloud():
         
             if run_s2d:
                 
-                img, depth, K_new = self.run_s2d(run_s2d, img, depth)
+                print(f"Sparse to dense: {n+1}/{len(dfiles)}")
+                img, _, _, depth, K_new = self.run_s2d(run_s2d, img, depth, K)
                 K = K_new
             
              
@@ -128,14 +140,14 @@ class PointCloud():
         pcl = self.cam_to_world(pcl, T_c2w)
         pcl.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=10))
         
-    
-        pcl, out1 = self.remove_background(pcl)
-        pcl, out2 = self.remove_hidden_pts(pcl, cam_pose)
-        pcl, out3 = self.remove_infeasable_pts(pcl, cam_pose)
-        pcl, out4 = self.remove_outliers(pcl)
+        if self.configs.filters:
+            pcl, out1 = self.remove_background(pcl)
+            pcl, out2 = self.remove_hidden_pts(pcl, cam_pose)
+            pcl, out3 = self.remove_infeasable_pts(pcl, cam_pose)
+            pcl, out4 = self.remove_outliers(pcl)
         
-        outlier_cloud = out1 + out2, out3, out4
-        self.outliers.append(outlier_cloud)
+            outlier_cloud = out1 + out2, out3, out4
+            self.outliers.append(outlier_cloud)
         
         return pcl
     
@@ -226,18 +238,20 @@ class PointCloud():
             
         return pcl
     
-    def run_s2d(self, model_path, img, depth):
+    def run_s2d(self, model_path, img, depth, K):
         
-        checkpoint = torch.load(model_path) 
-        model = checkpoint["model"]
-        model.eval()
-        inp, img, depth, K_new = self._prepareS2Dinput(img, depth, self.K)
-        pred = model(inp)
+        
+        inp = self._prepare_s2d_input(img, depth, K)
+        K_new = inp["K"].squeeze().numpy()
+        img = (inp["rgb"].squeeze().numpy().transpose(1,2,0) * 255).astype(np.uint16)
+        depth = inp["d"].squeeze().numpy()
+        pred = self.model(inp)
         pred = pred.detach().cpu().squeeze().numpy()
         filled = depth.copy()
         filled[depth==0] = pred[depth==0]
         
-        return pred
+        
+        return img, depth, filled, pred, K_new
     
     def registration(self, pcl):
         
@@ -286,6 +300,11 @@ class PointCloud():
         return mesh
     
     
+    def safe_pcl(self, path):
+              
+        o3d.io.write_point_cloud(path, self.unified_pcl)
+        
+            
     
     def cam_to_world(self, pcl, T_c2w):
     

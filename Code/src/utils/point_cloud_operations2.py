@@ -23,7 +23,7 @@ torch.cuda.empty_cache()
 
 
 
-class PointCloud():
+class PointCloud2():
     def __init__(self, pcl_configs, offset_parameters):
         # self.vis = o3d.visualization.Visualizer()
         self.pcl = o3d.geometry.PointCloud()

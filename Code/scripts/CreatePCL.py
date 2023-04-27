@@ -9,6 +9,12 @@ Created on Thu Dec 29 11:34:48 2022
 import time
 import os
 
+import sys
+
+PENet_path = '/home/simonst/github/PENet'
+if PENet_path not in sys.path:
+    sys.path.append(PENet_path)
+
 import numpy as np
 import open3d as o3d
 import copy
@@ -23,13 +29,19 @@ from utils.point_cloud_operations2 import PointCloud2
 
 from utils.camera_operations import StereoCamera
 from utils.worktable_operations import Object, Worktable
+
+
+    
 # import pyransac3d as pyrsc
 
 # from pcls
 
 
-cp = "/home/simonst/github/sparse-to-dense/results/wt.sparsifier=None.samples=0.modality=rgbd.arch=resnet18.decoder=deconv2.criterion=l1.lr=0.01.bs=4.pretrained=True/checkpoint-99.pth.tar"
-path = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230417_174726"
+cp1 = "/home/simonst/github/results/no_sparsifier/pe_train/model_best.pth.tar"
+cp2 = "/home/simonst/github/results/dots_sparsifier/pe_train/model_best.pth.tar"
+cp3 = "/home/simonst/github/results/edge_sparsifier/pe_train/model_best.pth.tar"
+
+path = "/home/simonst/github/Datasets/wt/raw/20230417_174726"
 # path = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230417_174256"
 
 
@@ -40,27 +52,38 @@ pcl_configs = PCLConfigs(outliers=False,
                          hp_radius=75,
                          angle_thresh=0,
                          std_ratio=10,
-                          registration_method="none",
+                         registration_method="none",
+                         filters=False,
                          )
 
 
 pcl = PointCloud(pcl_configs)
-
-
 pcd = pcl.create_multi_view_pcl(path)
 pcl.visualize(pcd, outliers=False)
+pcl.safe_pcl(os.path.join(path, "orig_unfiltered.ply"))
+
+#no
+pcl1 = PointCloud(pcl_configs)
+pcd1 = pcl1.create_multi_view_pcl(path, run_s2d=cp1)
+pcl1.visualize(pcd1, outliers=False)
+pcl1.safe_pcl(os.path.join(path, "no_sparsifier_unfiltered.ply"))
+
+#dots
+pcl2 = PointCloud(pcl_configs)
+pcd2 = pcl2.create_multi_view_pcl(path, run_s2d=cp2)
+pcl2.visualize(pcd2, outliers=False)
+pcl2.safe_pcl(os.path.join(path, "dots_sparsififer_unfiltered.ply"))
+
+# edge
+pcl3 = PointCloud(pcl_configs)
+pcd3 = pcl3.create_multi_view_pcl(path, run_s2d=cp3)
+pcl3.visualize(pcd3, outliers=False)
+pcl3.safe_pcl(os.path.join(path, "edge_sparsifier_unfiltered.ply"))
 
 
 
-offset_params=OffsetParameters
-_,K,_ = loadIntrinsics()
-pcl2 = PointCloud2(pcl_configs, offset_params)
-
-pcl2.load_PCL_from_depth(path, K)
-pcl2.ProcessPCL()
-
-pcd.translate([1,0,0])
-o3d.visualization.draw_geometries([pcl2.unified_pcl, pcd])
+# pcd.translate([1,0,0])
+# o3d.visualization.draw_geometries([pcl2.unified_pcl, pcd])
 # def custom_draw(pcd):
     
 #     def rotate(vis):
