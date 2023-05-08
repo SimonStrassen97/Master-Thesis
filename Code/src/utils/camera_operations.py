@@ -322,14 +322,15 @@ class StereoCamera():
         if not path:
             path = "."
             
-        file = os.path.join(path, "intrinsics.pkl")
         
         if mode=="pkl":
+            file = os.path.join(path, "intrinsics.pkl")
             with open(file, "wb") as f:
                 pickle.dump(self.intrinsics, f)  
             
         if mode=="txt":
-            with open("./intrinsics.txt", "w") as f:
+            file = os.path.join(path, "intrinsics.txt")
+            with open(file, "w") as f:
                 json.dump(self.intrinsics, f, indent=4)
         
         else:

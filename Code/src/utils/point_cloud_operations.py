@@ -276,6 +276,9 @@ class PointCloud():
                     source, target, self.configs.registration_radius, current_transformation)
             source.transform(result_color_icp.transformation)
             
+        else:
+            print("no registration")
+            
         return pcl
     
     
@@ -330,7 +333,6 @@ class PointCloud():
         dfiles = os.listdir(depth_folder)
         dfiles.sort()
         
-        idx = np.linspace(0, len(dfiles) - 1, n_images).astype(int)
         
         img_folder = os.path.join(path, "img")
         ifiles = os.listdir(img_folder)
@@ -341,6 +343,7 @@ class PointCloud():
         data_files = os.listdir(data_folder)
         data_files.sort()
         
+        idx = np.linspace(0, len(dfiles) - 1, n_images).astype(int)
         
         dfiles = [os.path.join(depth_folder, dfiles[x]) for x in idx]
         ifiles = [os.path.join(img_folder, ifiles[x]) for x in idx]

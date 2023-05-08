@@ -12,7 +12,7 @@ setup(
     version="1.0",
     author="Simon Strassen",
     author_email="simonst@ethz.ch",
-    packages=["PyTeMotion", "utils"],
+    packages=["PyTeMotion", "utils", "pycolmap_utils"],
     package_dir={"": "src"},
 )
 

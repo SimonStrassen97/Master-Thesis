@@ -1,6 +1,9 @@
 setup.py
 src/PyTeMotion/AxisFunctions.py
 src/PyTeMotion/__init__.py
+src/pycolmap_utils/__init__.py
+src/pycolmap_utils/read_write_dense.py
+src/pycolmap_utils/read_write_model.py
 src/recon_source_code.egg-info/PKG-INFO
 src/recon_source_code.egg-info/SOURCES.txt
 src/recon_source_code.egg-info/dependency_links.txt

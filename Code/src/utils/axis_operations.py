@@ -23,7 +23,7 @@ class AxisMover():
         self.CGA_z = z
         self.CGA_r = r
         
-        self.checkpoints = None
+        self.checkpoints = []
         self.step_size = None
         
         self.configs = configs
@@ -188,35 +188,42 @@ class AxisMover():
         return True
    
 
-    def _calcTotalDist(self):
+    def _calcTotalDist(self, checkpoints):
         
         total_dist = 0
         prev_cp = None
-        for i, cp in enumerate(self.checkpoints[:,0:3]):
+        sections = []
+        for i, cp in enumerate(checkpoints[:,0:3]):
             if i!=0:
-                total_dist += np.linalg.norm(cp-prev_cp)
+                section = np.linalg.norm(cp-prev_cp)
+                total_dist += section
+                sections.append(section)
             prev_cp = cp
             
-        return total_dist
+        return total_dist, sections
             
         
         
-    def evalCPs(self, n_imgs):
+    def evalCPs(self, checkpoints, n_imgs):
         
         
         MAX_VALUES = [self.configs.x_max, self.configs.y_max, self.configs.z_max, self.configs.r_max]
         
-        for i, axis in enumerate(self.checkpoints.T):
+        for i, axis in enumerate(checkpoints.T):
             if i ==4: 
                 axis[axis<0] += 360
             axis[axis==-1] = MAX_VALUES[i]
             axis[axis>MAX_VALUES[i]] = MAX_VALUES[i]
             
         
-        total_dist = self._calcTotalDist()
+        total_dist, sections = self._calcTotalDist(checkpoints)
+        # perc = np.array(sections) / total_dist
+       
+        step_size= round(total_dist/n_imgs)
         
-        self.step_size= round(total_dist/n_imgs)
-        
+        return step_size
+    
+    
     def saveData(self, path, overwrite=True):
         
         df = pd.DataFrame(self.data)
@@ -266,48 +273,61 @@ class AxisMover():
             ret=True
         
         return ret, target_pos
+    
+    
+    def MovePlanner(self, cps, n_imgs=50, r_jitter=False, ret=False):
         
-    def MovePlanner(self, checkpoints, n_imgs=50, ret=False):
+            
+        # print(checkpoints)
+        checkpoints = cps.copy()
+        done = False
+        n = 0
+        while not done:
+            
+            jitter = 0
+            if r_jitter:
+                jitter = np.random.choice([1,-1]) * np.random.uniform(3,4)
+                jitter = np.array([0,0,0,jitter])
+            
+            if n==0:
+                step_size = self.evalCPs(checkpoints, n_imgs)
+                target_pos = checkpoints[0]
+                prev_pos = target_pos
+                r = checkpoints[0,3]
+                checkpoints = checkpoints[1:]
+            
+            else:
+                next_cp = checkpoints[0]
+                dist_to_cp = np.linalg.norm(next_cp[:3] - prev_pos[:3])
+                
+                if dist_to_cp-step_size < 0.5* step_size:
+                # if dist_to_cp < step_size:
+                    target_pos = next_cp
+                    r = checkpoints[0,3]
+                    checkpoints = checkpoints[1:]
+                    
+                    if not len(checkpoints):
+                        done = True
+                
+                else:
+                    direction = (next_cp[:3] - prev_pos[:3]) / dist_to_cp
+                    step = direction * step_size
+                    step = np.append(step, 0)
+                    target_pos = prev_pos + step
+                 
+                
+            target_pos[3] = r
+            target_pos += jitter
+            print(n, target_pos)
+            self.checkpoints.append(target_pos)
+            prev_pos = target_pos
+            n += 1
+    
+    def Mover(self):
         
         done = False
-        
-        if self.move_counter==0:
-            self.checkpoints=checkpoints
-            self.MoveTo(checkpoints[0])
-            self.evalCPs(n_imgs)
-            
-            # self._updatePos()
-            self.prev_target = checkpoints[0]
-          
-        
-        next_cp = self.checkpoints[0]
-        dist_to_cp = np.linalg.norm(next_cp[:3] - self.current_pos[:3])
-        
-        if dist_to_cp-self.step_size < 0.5*self.step_size:
-            target_pos = next_cp
-            self.checkpoints = self.checkpoints[1:]
-            
-            if not len(self.checkpoints):
-                done = True
-        
-        else:
-            direction = (next_cp[:3] - self.current_pos[:3]) / dist_to_cp
-            step = direction * self.step_size
-            step = np.append(step, 0)
-            target_pos = self.prev_target + step
-            target_pos[3] = self.prev_target[3]
-        
-        # move
-        ret = self.MoveTo(target_pos)
-        
-        if not ret:
-            raise ValueError
-        self.prev_target = target_pos
-        
-        
-        error = target_pos - self.current_pos
-        # update state
-        # self._updatePos()
+        cp = self.checkpoints[self.move_counter]
+        self.MoveTo(cp)
         
         
         if self.calibrated:
@@ -316,23 +336,22 @@ class AxisMover():
             c_w = np.append(c_w, self.current_pos[-1])
             
             
-            self.data_["target"] = np.array(target_pos)
+            self.data_["target"] = np.array(cp)
             self.data_["read"] = np.array(self.current_pos)
             self.data_["cam"] = c_w
             self.data_["T_c2w"] = T_c2w
             self.data_["T_w2c"] = T_w2c
-        
-        # add to data
-        data_list = [self.move_counter] + [x for x in target_pos] + [x for x in self.current_pos]
+            
+        data_list = [self.move_counter] + [x for x in cp] + [x for x in self.current_pos]
         self.data.append(data_list)
         self.move_counter += 1
-        
-        
-        
-        if ret:
-            return done, target_pos, error
-        else:
-            return done
+                
+        if self.move_counter == len(self.checkpoints):
+            done = True
+            
+            
+        return done
+            
         
     def getCam2Arm(self):
         
@@ -347,6 +366,9 @@ class AxisMover():
                             self.calib_params.y_pin2cam,
                             self.calib_params.z_pin2cam
                             ])
+        
+        R = Rot.from_euler("z", r, degrees=True)
+        pin2cam = R.apply(pin2cam)
         
         arm2pin = np.array([x,
                             y,

@@ -41,14 +41,15 @@ cp1 = "/home/simonst/github/results/no_sparsifier/pe_train/model_best.pth.tar"
 cp2 = "/home/simonst/github/results/dots_sparsifier/pe_train/model_best.pth.tar"
 cp3 = "/home/simonst/github/results/edge_sparsifier/pe_train/model_best.pth.tar"
 
-path = "/home/simonst/github/Datasets/wt/raw/20230417_174726"
+path = "/home/simonst/github/Datasets/wt/raw/20230508_153614"
+path = "/home/simonst/github/Datasets/wt/raw/20230502_162127"
+
 # path = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230417_174256"
 
 
 
 pcl_configs = PCLConfigs(outliers=False, 
                          voxel_size=0.001, 
-                         n_images=5,
                          hp_radius=75,
                          angle_thresh=0,
                          std_ratio=10,
@@ -58,27 +59,43 @@ pcl_configs = PCLConfigs(outliers=False,
 
 
 pcl = PointCloud(pcl_configs)
-pcd = pcl.create_multi_view_pcl(path)
-pcl.visualize(pcd, outliers=False)
-pcl.safe_pcl(os.path.join(path, "orig_unfiltered.ply"))
+pcd = pcl.create_multi_view_pcl(path, n_images=5)
+pcl.visualize(pcd, coord_scale=0.25, outliers=False)
+# out_path = os.path.join(path, "orig")
+# if not os.path.exists(out_path):
+#     os.makedirs(out_path)
+# pcl.safe_pcl(os.path.join(out_path, "orig.ply"))
+# cv2.imwrite(os.path.join(out_path, "orig.png"), pcl.depths[0])
 
-#no
-pcl1 = PointCloud(pcl_configs)
-pcd1 = pcl1.create_multi_view_pcl(path, run_s2d=cp1)
-pcl1.visualize(pcd1, outliers=False)
-pcl1.safe_pcl(os.path.join(path, "no_sparsifier_unfiltered.ply"))
+# #no
+# pcl1 = PointCloud(pcl_configs)
+# pcd1 = pcl1.create_multi_view_pcl(path, n_images=1, run_s2d=cp1)
+# pcl1.visualize(pcd1, coord_scale=0.25, outliers=False)
+# out_path = os.path.join(path, "no_sparsifier")
+# if not os.path.exists(out_path):
+#     os.makedirs(out_path)
+# # cv2.imwrite(os.path.join(out_path, "no_sparsifier.png"), pcl1.depths[0])
+# # pcl1.safe_pcl(os.path.join(out_path, "no_sparsifier.ply"))
 
-#dots
-pcl2 = PointCloud(pcl_configs)
-pcd2 = pcl2.create_multi_view_pcl(path, run_s2d=cp2)
-pcl2.visualize(pcd2, outliers=False)
-pcl2.safe_pcl(os.path.join(path, "dots_sparsififer_unfiltered.ply"))
+# #dots
+# pcl2 = PointCloud(pcl_configs)
+# pcd2 = pcl2.create_multi_view_pcl(path, n_images=1, run_s2d=cp2)
+# pcl2.visualize(pcd2, coord_scale=0.25, outliers=False)
+# out_path = os.path.join(path, "dots_sparsifier")
+# if not os.path.exists(out_path):
+#     os.makedirs(out_path)
+# # cv2.imwrite(os.path.join(out_path, "dots_sparsifier.png"), pcl2.depths[0])
+# # pcl2.safe_pcl(os.path.join(out_path, "dots_sparsififer..ply"))
 
-# edge
-pcl3 = PointCloud(pcl_configs)
-pcd3 = pcl3.create_multi_view_pcl(path, run_s2d=cp3)
-pcl3.visualize(pcd3, outliers=False)
-pcl3.safe_pcl(os.path.join(path, "edge_sparsifier_unfiltered.ply"))
+# # edge
+# pcl3 = PointCloud(pcl_configs)
+# pcd3 = pcl3.create_multi_view_pcl(path, n_images=1, run_s2d=cp3)
+# pcl3.visualize(pcd3, coord_scale=0.25, outliers=False)
+# out_path = os.path.join(path, "edge_sparsifier")
+# if not os.path.exists(out_path):
+#     os.makedirs(out_path)
+# cv2.imwrite(os.path.join(out_path, "edge_sparsifier.png"), pcl3.depths[0])
+# # pcl3.safe_pcl(os.path.join(out_path, "edge_sparsifier..ply"))
 
 
 
