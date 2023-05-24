@@ -13,8 +13,6 @@ import shutil
 import pickle
 import json
 import torch
-from CoordConv import AddCoordsNp
-from dataloaders.transforms import ToTensor
 
 
 from dataclasses import dataclass
@@ -83,25 +81,39 @@ class AxisConfigs(ConfigBase):
 @dataclass
 class PCLConfigs(ConfigBase):
     
-    voxel_size: float = 0.05
+    
+    verbose: bool = False
+    
+    pre_voxel_size: float = 0.0
+    voxel_size: float = 0.0
     
     # m
     depth_thresh: float = 1
     
     # CleanUp
     # m
-    border_x: tuple = (0.0, 0.700)
+    border_x: tuple = (-0.01, 0.800)
     border_y: tuple = (-0.01, 0.600)
-    border_z: tuple = (-0.01, 0.5)
+    border_z: tuple = (-0.01, 0.175)
     
+    #########################################
     # filters
     filters: bool = True
+    
+    #hidden points
     hp_radius: float = 75
     angle_thresh: float = 95
-    std_ratio: float = 1
     
-    nb_points: int = 10
-    outlier_radius: float = 0.01
+    # statistical outlier 
+    nb_points_stat: int = 50
+    std_ratio_stat: float = 1
+    
+    # box filter
+    nb_points_box: int = 10
+    box_radius: float = 0.01
+    ###########################################
+    
+    
     # mesh
     recon_method: str = "poisson"
     
@@ -433,60 +445,57 @@ def loadIntrinsics(path=None):
 
     return K_d, K_c, intrinsics
   
-
-
 def prepare_s2d_input(img, depth, K):
-     
-     crop_size = (224, 416)
-     img, ratio = ResizeWithAspectRatio(img, height=240)
-     # depth_, _ = ResizeWithAspectRatio(depth, height=240)
-     depth, K_new = ResizeViaProjection(depth, K, out_size=(240,424))
-     
-     cur_size = img.shape
-     diff = (cur_size[0]-crop_size[0], cur_size[1]-crop_size[1])
-     K_new[0,2] -= diff[1]/2
-     K_new[1,2] -= diff[0]/2
-     
-     img = Crop(img, crop_size)
-     depth = Crop(depth, crop_size)
-     rgb = np.asfarray(img, dtype='float32') / 255
-     depth = np.asfarray(depth, dtype="float32")
-     depth = np.expand_dims(depth, -1)        
+    
+    crop_size = (228, 304)
+    img, ratio = ResizeWithAspectRatio(img, height=240)
+    # depth_, _ = ResizeWithAspectRatio(depth, height=240)
+    depth, K_new = ResizeViaProjection(depth, K, out_size=(240,424))
+    
+    cur_size = img.shape
+    diff = (cur_size[0]-crop_size[0], cur_size[1]-crop_size[1])
+    K_new[0,2] -= diff[1]/2
+    K_new[1,2] -= diff[0]/2
+    
+    img = Crop(img, crop_size)
+    depth = Crop(depth, crop_size)
+    rgb = np.asfarray(img, dtype='float32') / 255
+    depth = np.asfarray(depth, dtype="float32")
+    rgbd = np.append(rgb, np.expand_dims(depth, axis=2), axis=2)
+    rgbd = torch.from_numpy(rgbd.transpose((2, 0, 1)).copy())
+    
+    return rgbd.unsqueeze(0), img, depth, K_new
+    
 
-     position = AddCoordsNp(224, 416)
-     position = position.call()
-     
-     candidates = {"rgb": rgb, "d": depth, "gt": depth, \
-                   'position': position, 'K': K_new}
-     
-     to_tensor = ToTensor()
-     to_float_tensor = lambda x: to_tensor(x).float()
+def ME(x,y):
+    
+    e = x-y
+    me = e.mean()
+    
+    return me
 
-     items = {
-         key: to_float_tensor(val).unsqueeze(0)
-         for key, val in candidates.items() if val is not None
-     }
-  
-     return items
+def MAE(x,y):
     
-                                                                        
-# def prepare_s2d_input(img, depth, K):
+    ae = abs(x-y)
+    mae = ae.mean()
     
-#     crop_size = (228, 304)
-#     img, ratio = ResizeWithAspectRatio(img, height=240)
-#     # depth_, _ = ResizeWithAspectRatio(depth, height=240)
-#     depth, K_new = ResizeViaProjection(depth, K, out_size=(240,424))
+    return mae
+
+
+def MSE(x,y):
     
-#     cur_size = img.shape
-#     diff = (cur_size[0]-crop_size[0], cur_size[1]-crop_size[1])
-#     K_new[0,2] -= diff[1]/2
-#     K_new[1,2] -= diff[0]/2
+    se = (x-y)**2
+    mse = se.mean()
     
-#     img = Crop(img, crop_size)
-#     depth = Crop(depth, crop_size)
-#     rgb = np.asfarray(img, dtype='float32') / 255
-#     depth = np.asfarray(depth, dtype="float32")
-#     rgbd = np.append(rgb, np.expand_dims(depth, axis=2), axis=2)
-#     rgbd = torch.from_numpy(rgbd.transpose((2, 0, 1)).copy())
+    return mse
+
+
+def RMSE(x,y):
     
-#     return rgbd.unsqueeze(0), img, depth, K_new
+    se = (x-y)**2
+    mse = se.mean()
+    rmse = np.sqrt(mse)
+    
+    return rmse                                                       
+
+

@@ -138,7 +138,7 @@ class StereoCamera():
         
         self.pipeline.stop()
         
-    def getFrame(self, n_imgs=10, color=True, depth=True, ret=False):
+    def getFrame(self, n_imgs=10, T_c2w=None, color=True, depth=True, ret=False):
 
         # Wait for a coherent pair of frames: depth and color
          
@@ -257,7 +257,7 @@ class StereoCamera():
     
         # np.save(real_depth_file, self.depth_img)
         cv2.imwrite(depth_file, self.depth_img.astype("uint16"))
-        cv2.imwrite(filtered_file, self.filtered_img.astype("uint16"))
+        # cv2.imwrite(filtered_file, self.filtered_img.astype("uint16"))
         cv2.imwrite(img_file, self.color_img)
             
 

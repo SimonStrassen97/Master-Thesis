@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 #from util.misc import visualize_attention
 
 
-def run(img, img_name, output_path, model_path, model_type="dpt_hybrid", absolute_depth=False, optimize=True):
+def run(img, model_path, img_name, output_path=None, model_type="dpt_hybrid", absolute_depth=False, optimize=True):
     """Run MonoDepthNN to compute depth maps.
 
     Args:
@@ -104,7 +104,8 @@ def run(img, img_name, output_path, model_path, model_type="dpt_hybrid", absolut
     model.to(device)
 
     # create output folder
-    os.makedirs(output_path, exist_ok=True)
+    if output_path:
+        os.makedirs(output_path, exist_ok=True)
 
     print("start processing")
     
@@ -140,14 +141,15 @@ def run(img, img_name, output_path, model_path, model_type="dpt_hybrid", absolut
             .numpy()
         )
 
-        if model_type == "dpt_hybrid_nyu":
-            prediction *= 1000.0
+        # if model_type == "dpt_hybrid_nyu":
+        #     prediction *= 1000.0
 
-    filename = os.path.join(
-        output_path, img_name[:-7]+"dpt")
-    
-    prediction = util.io.write_depth(filename, prediction, bits=2,absolute_depth=absolute_depth)
-    
+    if output_path:
+        filename = os.path.join(
+            output_path, img_name[:-7]+"dpt")
+        
+        prediction = util.io.write_depth(filename, prediction, bits=2,absolute_depth=absolute_depth)
+        
     # fig, ax = plt.subplots(1,2)
     # ax[0].imshow(img)
     # ax[1].imshow(prediction)

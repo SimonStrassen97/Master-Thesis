@@ -14,7 +14,6 @@ import torch
 import json
 
 from scipy.spatial.transform import Rotation as Rot
-from model import PENet_C2
 
 from utils.general import ResizeWithAspectRatio, Crop, ResizeViaProjection 
 from utils.general import projectPoints, deprojectPoints
@@ -45,9 +44,12 @@ class PointCloud():
         
         self.outliers = []
 
+
     def load_data(self, dpath, ipath, data_path):
         
-        
+        if not self.depth_scale:
+            self._loadIntrinsics(os.path.dirname(os.path.dirname(dpath)))
+            
         depth = cv2.imread(dpath,-1)
         depth = depth * self.depth_scale
         
@@ -74,7 +76,7 @@ class PointCloud():
         ind = np.where(condition)[0]
         pcl = pcl.select_by_index(ind)
         
-        pcl = self.limit_depth(pcl)
+        pcl = self.preprocess(pcl)
         
         return pcl
     
@@ -85,34 +87,29 @@ class PointCloud():
         if not self.K:
             self._loadIntrinsics(path)
             
-        if run_s2d:
-            torch.cuda.empty_cache()
-            checkpoint = torch.load(run_s2d, map_location="cpu")
-            args = checkpoint["args"]
-            args.cpu =  True
-            self.model = PENet_C2(args)
-            self.model.load_state_dict(checkpoint['model'], strict=False) 
-            self.model.eval()
-            self.model.to("cpu")
-            
         dfiles, ifiles, data_files = self._get_file_names(path, n_images)
+        
+        # print(dfiles,ifiles,data_files)
         
         for n, (d, i, dd) in enumerate(zip(dfiles, ifiles, data_files)):
             
-            print("-" * 20)
-            print(f"{n+1}/{len(dfiles)}")
-            print("-" * 20)
+            if self.configs.verbose:
+                print("-" * 20)
+                print(f"{n+1}/{len(dfiles)}")
+                print("-" * 20)
             
             depth, img, data = self.load_data(d,i,dd)
             K = self.K
         
             if run_s2d:
                 
-                print(f"Sparse to dense: {n+1}/{len(dfiles)}")
-                img, _, _, depth, K_new = self.run_s2d(run_s2d, img, depth, K)
+                img, depth, K_new = self.run_s2d(run_s2d, img, depth)
                 K = K_new
             
-             
+            
+            # not using first x columns because of missing values due to stereo camera baseline
+            depth[:,:35] = 0
+            
             pcl = self.calc_pcl(img, depth, K)
             pcl = self.process_pcl(pcl, data)
                         
@@ -121,10 +118,18 @@ class PointCloud():
             self.pose_data.append(data)
             self.pcls.append(pcl)
             
-            if n>0:
-                pcl = self.registration(pcl)
+            if n>0 and self.configs.registration_method:
+                pcl = self.icp_registration(pcl)
         
             self.unified_pcl += pcl
+        
+        
+        if self.configs.voxel_size:
+            
+            self.unified_pcl = self.unified_pcl.voxel_down_sample(voxel_size=self.configs.voxel_size)
+            
+        
+        # self.remove_outliers(self.unified_pcl)
             
         return self.unified_pcl
         
@@ -145,24 +150,29 @@ class PointCloud():
             pcl, out2 = self.remove_hidden_pts(pcl, cam_pose)
             pcl, out3 = self.remove_infeasable_pts(pcl, cam_pose)
             pcl, out4 = self.remove_outliers(pcl)
-        
-            outlier_cloud = out1 + out2, out3, out4
+            
+            
+            outlier_cloud = out1 + out3 + out4
+            outlier_cloud = out1 + out2 + out3 + out4
+
             self.outliers.append(outlier_cloud)
+            
         
         return pcl
     
     def remove_background(self, pcl):
         
         points = np.array(pcl.points)
-        x,y,z = self.configs.border_x, self.configs.border_y, self.configs.border_x
-        
+        x,y,z = self.configs.border_x, self.configs.border_y, self.configs.border_z
+      
         in_x = np.logical_and(points[:,0] > x[0], points[:,0] < x[1])
         in_y = np.logical_and(points[:,1] > y[0], points[:,1] < y[1])
         in_z = np.logical_and(points[:,2] > z[0], points[:,2] < z[1])
         
         condition = in_z & in_x & in_y
         ind = np.where(condition)[0]
-        print(f"Position filter removed {len(pcl.points)-len(ind)} points.")
+        if self.configs.verbose:
+            print(f"Position filter removed {len(pcl.points)-len(ind)} points.")
         
         outlier_cloud = pcl.select_by_index(ind, invert=True)
         pcl = pcl.select_by_index(ind)
@@ -175,7 +185,8 @@ class PointCloud():
     def remove_hidden_pts(self, pcl, cam_pose):
               
         _, ind = pcl.hidden_point_removal(cam_pose[:-1], self.configs.hp_radius)
-        print(f"Hidden Points filter removed {len(pcl.points)-len(ind)} points.")
+        if self.configs.verbose:
+            print(f"Hidden Points filter removed {len(pcl.points)-len(ind)} points.")
         outlier_cloud = pcl.select_by_index(ind, invert=True)
         pcl = pcl.select_by_index(ind)
         
@@ -185,22 +196,27 @@ class PointCloud():
     
     def remove_outliers(self, pcl):
         
-        _, ind = pcl.remove_statistical_outlier(nb_neighbors=50, std_ratio=self.configs.std_ratio)
-        print(f"Outlier filter removed {len(pcl.points)-len(ind)} points.")
+        _, ind = pcl.remove_statistical_outlier(nb_neighbors=self.configs.nb_points_stat, std_ratio=self.configs.std_ratio_stat)
+        if self.configs.verbose:
+            print(f"Outlier filter removed {len(pcl.points)-len(ind)} points.")
       
         outlier_cloud1 = pcl.select_by_index(ind, invert=True)
         pcl = pcl.select_by_index(ind)
         
         
+        radius = self.configs.box_radius
+        if not self.configs.box_radius:
+            radius = 0.005
+
+        _, ind = pcl.remove_radius_outlier(nb_points=self.configs.nb_points_box, radius=radius)
+        if self.configs.verbose:
+            print(f"Outlier filter removed {len(pcl.points)-len(ind)} points.")
         
-        # _, ind = self.pcl.remove_radius_outlier(nb_points=self.configs.nb_points, radius=self.configs.outlier_radius)
-        # print(f"Outlier filter removed {len(self.pcl.points)-len(ind)} points.")
-        
-        # outlier_cloud2 = self.pcl.select_by_index(ind, invert=True)
-        # self.pcl = self.pcl.select_by_index(ind)
+        outlier_cloud2 = pcl.select_by_index(ind, invert=True)
+        pcl = pcl.select_by_index(ind)
         
         
-        outlier_cloud = outlier_cloud1 #+ outlier_cloud2
+        outlier_cloud = outlier_cloud1# + outlier_cloud2
         outlier_cloud.paint_uniform_color([0.7, 0.7, 0])
     
         
@@ -218,7 +234,8 @@ class PointCloud():
     
         ind = np.where(angles>self.configs.angle_thresh)[0]
         
-        print(f"View direction filter removed {len(pcl.points)-len(ind)} points.")
+        if self.configs.verbose:
+            print(f"View direction filter removed {len(pcl.points)-len(ind)} points.")
         outlier_cloud = pcl.select_by_index(ind, invert=True)
         pcl = pcl.select_by_index(ind)
         
@@ -227,7 +244,7 @@ class PointCloud():
         return pcl, outlier_cloud
     
    
-    def limit_depth(self, pcl):
+    def preprocess(self, pcl):
         
         if self.configs.depth_thresh:
             points = np.array(pcl.points)
@@ -236,24 +253,26 @@ class PointCloud():
             ind = np.where(condition)[0]
             pcl = pcl.select_by_index(ind)
             
+        if self.configs.pre_voxel_size:
+            
+            pcl = pcl.voxel_down_sample(voxel_size=self.configs.pre_voxel_size)
+            
         return pcl
     
-    def run_s2d(self, model_path, img, depth, K):
+    def run_s2d(self, model_path, img, depth):
         
-        
-        inp = self._prepare_s2d_input(img, depth, K)
-        K_new = inp["K"].squeeze().numpy()
-        img = (inp["rgb"].squeeze().numpy().transpose(1,2,0) * 255).astype(np.uint16)
-        depth = inp["d"].squeeze().numpy()
-        pred = self.model(inp)
+        checkpoint = torch.load(model_path) 
+        model = checkpoint["model"]
+        model.eval()
+        inp, img, depth, K_new = self._prepareS2Dinput(img, depth, self.K)
+        pred = model(inp)
         pred = pred.detach().cpu().squeeze().numpy()
         filled = depth.copy()
         filled[depth==0] = pred[depth==0]
         
-        
-        return img, depth, filled, pred, K_new
+        return pred
     
-    def registration(self, pcl):
+    def icp_registration(self, pcl):
         
         target = self.pcls[0]
         source = pcl
@@ -275,9 +294,6 @@ class PointCloud():
             result_color_icp = o3d.pipelines.registration.registration_colored_icp(
                     source, target, self.configs.registration_radius, current_transformation)
             source.transform(result_color_icp.transformation)
-            
-        else:
-            print("no registration")
             
         return pcl
     
@@ -303,11 +319,6 @@ class PointCloud():
         return mesh
     
     
-    def safe_pcl(self, path):
-              
-        o3d.io.write_point_cloud(path, self.unified_pcl)
-        
-            
     
     def cam_to_world(self, pcl, T_c2w):
     
@@ -384,6 +395,9 @@ class PointCloud():
             
         o3d.visualization.draw_geometries(vis_list)
     
+    def save_pcl(self, path):
+        
+        o3d.io.write_point_cloud(path, self.unified_pcl)
     
     def _StringToColor(self, string):
         
