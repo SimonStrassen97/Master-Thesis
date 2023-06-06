@@ -5,380 +5,894 @@ Created on Mon May 15 12:53:25 2023
 @author: SI042101
 """
 
+import pycolmap
+from pathlib import Path
 
-# TODO: Color change for missing grids, PCL with color as distance measure
 import os
 import open3d as o3d
 import time
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+import sys
+
+PENet_path = '/home/simonst/github/PENet'
+if PENet_path not in sys.path:
+    sys.path.append(PENet_path)
 
 
-from utils.worktable_operations import Object, Worktable
-from utils.WT_configs import *
+from utils.worktable_operations import Worktable
+from utils.WT_configs import wt1, wt2, wt3, wt4
 
 
-from utils.general import StreamConfigs, PCLConfigs, StreamConfigs, OffsetParameters
-from utils.point_cloud_operations import PointCloud
-from utils.general import MSE, RMSE, MAE, ME
+# from utils.general import PCLConfigs, OffsetParameters
+# from utils.point_cloud_operations import PointCloud
+# from utils.point_cloud_operations2 import PointCloud2
+# from utils.general import loadIntrinsics
+from utils.process_colmap_output import process_colmap_pcl
+
+
+import pandas as pd
+
+# import torch
+# torch.cuda.empty_cache()
 
 
 
-# wt = Worktable()
-# wt.create_model(wt3)
-# wt.visualize(model=True)
+
+stl1 = "/home/simonst/github/Datasets/wt/wt1.stl"
+stl2 = "/home/simonst/github/Datasets/wt/wt2.stl"
+stl3 = "/home/simonst/github/Datasets/wt/wt3.stl"
+stl4 = "/home/simonst/github/Datasets/wt/wt4.stl"
 
 
+out_folder = "/home/simonst/github/Datasets/wt/eval"
 
-out_folder = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/eval"
-
-
-
-path1 = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230514_164433" # wt1
-path2 = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230514_173628" # wt2
-path3 = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230522_163051" # wt3
-path4 = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230522_140447" # wt4.2
+path1 = "/home/simonst/github/Datasets/wt/raw/20230514_164433" # wt1
+path2 = "/home/simonst/github/Datasets/wt/raw/20230514_173628" # wt2
+path3 = "/home/simonst/github/Datasets/wt/raw/20230522_163051" # wt3
+path4 = "/home/simonst/github/Datasets/wt/raw/20230522_140447" # wt4.2
 # path4 = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230522_124653" # wt4.1
 
 
+cp1 = ""
+cp2 = "/home/simonst/github/results/no_sparsifier/pe_train/model_best.pth.tar"
+cp3 = "/home/simonst/github/results/edge_sparsifier/pe_train/model_best.pth.tar"
+cp4 = "/home/simonst/github/results/dots_sparsifier/pe_train/model_best.pth.tar"
+
+names = ["wt1", "wt2", "wt3", "wt4"]
+cps = [cp1, cp2, cp3, cp4]
+stls = [stl1, stl2, stl3, stl4]
 paths = [path1, path2, path3, path4]
 wts = [wt1, wt2, wt3, wt4]
-names = ["wt1", "wt2", "wt3", "wt4"]
-n_imgs = [4,8,16,24,32, 48]
-voxel_size = [0, 0.001, 0.0025, 0.005, 0.0075, 0.01]
-grid_size = 0.0075
 
 
 
-# paths = [path1]
-# wts =[wt1]
-# names = ["wt1"]
-# n_imgs= [1,2]
-# voxel_size =[0.01,0.02]
-# grid_size = 0.0075
-n_pts = 250000
+##################################################################################
+#colmap evaluaton
 
 
 
-eval_time = time.time() 
-for i, (path, wt_dict) in enumerate(zip(paths, wts)):
+path1_ = "/home/simonst/github/Datasets/wt/raw/20230514_164433" # wt1
+path2_ = "/home/simonst/github/Datasets/wt/raw/20230514_173628" # wt2
+path3_ = "/home/simonst/github/Datasets/wt/raw/20230522_163051" # wt3
+path4_ = "/home/simonst/github/Datasets/wt/raw/20230522_140447" # wt4.2
+paths_ = [path1_, path2_, path3_, path4_]
+          
+
+grid_size = 0.007
+n_pts = 300000
+          
+for i, (name,path,stl,wt_dict) in enumerate(zip(names,paths_,stls,wts)):
     
+    
+    mean_e = pd.DataFrame(columns=["n_imgs"] + ["-"])
+    
+    mean_e.iloc[:,0] = len(os.listdir(os.path.join(path, "img")))
+    adjusted_e = mean_e.copy()
+    missing_e  = mean_e.copy()
+    added_e  = mean_e.copy()
+    e  = mean_e.copy()
+    mcd  = mean_e.copy()
+    mae1  = mean_e.copy()
+    mse1  = mean_e.copy()
+    rmse1  = mean_e.copy()
+    mae2  = mean_e.copy()
+    mse2  = mean_e.copy()
+    rmse2  = mean_e.copy()
+    cts = mean_e.copy()
     
     out = os.path.join(out_folder, names[i])
-    os.makedirs(out, exist_ok=True)
+    colmap_out = Path(os.path.join("/home/simonst/github/pycolmap_out/", name))
+    img_dir = Path(os.path.join(path, "img"))
     
+    if not os.path.exists(colmap_out):
+        colmap_out.mkdir()
     
-    fig1, ax1 = plt.subplots(1)
-    ax1.set_title("Chamfer Distance D(v=V,n)")
-    ax1.set_xlabel("n images")
-    ax1.set_ylabel("mm")
-    plt.tight_layout()
+    mvs_path = colmap_out / "mvs"
     
+    database_path = colmap_out / "database.db"
     
+    start = time.time()
+    pycolmap.extract_features(database_path, img_dir)
+    pycolmap.match_exhaustive(database_path)
+    maps = pycolmap.incremental_mapping(database_path, img_dir, colmap_out)
+    maps[0].write(colmap_out)
+    # dense reconstruction
+    pycolmap.undistort_images(mvs_path, colmap_out, img_dir)
+    pycolmap.patch_match_stereo(mvs_path)  # requires compilation with CUDA
+    pycolmap.stereo_fusion(mvs_path / "dense.ply", mvs_path)
     
-    fig2, ax2 = plt.subplots(1)
-    ax2.set_title("Computation Times T(v=V,n)")
-    ax2.set_xlabel("n images")
-    ax2.set_ylabel("s")
-    plt.tight_layout()
+    pcd = process_colmap_pcl(mvs_path, path)
+    t = time.time()-start
+                    
+    cts.loc[i, "-"] =  t                  
     
-        # ax.legend()
+    wt = Worktable()
+    wt.create_model(wt_dict)
+      
+    wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
+    wt.get_recon_wt(pcd)
+    
+    # print("Evaluating...")
+    adjusted_e_, e_, missing_e_, added_e_, mean_e_ = wt.evaluate_grids()    
+    cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
+    
+   
+
+    mean_e.loc[i, "-"] = mean_e_
+    adjusted_e.loc[i, "-"] = adjusted_e_
+    e.loc[i, "-"] = e_
+    missing_e.loc[i, "-"] = missing_e_
+    added_e.loc[i, "-"] = added_e_
+    mcd.loc[i, "-"] = mcd_            
+    mae1.loc[i, "-"] = recon2ref["mae"]
+    mse1.loc[i, "-"] = recon2ref["mse"]
+    rmse1.loc[i, "-"] = recon2ref["rmse"]
+    mae2.loc[i, "-"] = ref2recon["mae"]
+    mse2.loc[i, "-"] = ref2recon["mse"]
+    rmse2.loc[i, "-"] = ref2recon["rmse"]
+
+    mean_e.to_csv(os.path.join(out, "colmap_mean_e.csv"), index=False)    
+    adjusted_e.to_csv(os.path.join(out, "colmap_adjusted_e.csv"), index=False)
+    e.to_csv(os.path.join(out, "colmap_e.csv"), index=False)
+    missing_e.to_csv(os.path.join(out, "colmap_missing_e.csv"), index=False)
+    added_e.to_csv(os.path.join(out, "colmap_added_e.csv"), index=False)
+    mcd.to_csv(os.path.join(out, "colmap_mcd.csv"), index=False)
+    mae1.to_csv(os.path.join(out, "colmap_mae1.csv"), index=False)
+    mse1.to_csv(os.path.join(out, "colmap__mse1.csv"), index=False)
+    rmse1.to_csv(os.path.join(out, "colmap_rmse1.csv"), index=False)
+    mae2.to_csv(os.path.join(out, "colmap_mae2.csv"), index=False)
+    mse2.to_csv(os.path.join(out, "colmap_mse2.csv"), index=False)
+    rmse2.to_csv(os.path.join(out, "colmap_rmse2.csv"), index=False)
+    cts.to_csv(os.path.join(out, "colmap_cts.csv"), index=False)
+    
+
+
+
+
+# n_imgs = [4]
+# voxel_size = 0.0
+# filters = [True]
+# grid_size = 0.007
+# n_pts = 300000
+
+   
+# pcl_configs = PCLConfigs(outliers=False, 
+#                           pre_voxel_size=voxel_size, 
+#                           voxel_size=voxel_size,
+#                           hp_radius=75,
+#                           angle_thresh=75,
+#                           std_ratio_stat=2,
+#                           nb_points_stat=50,
+#                           nb_points_box=6,
+#                           box_radius=2*voxel_size,
+#                           registration_method="none",
+#                           filters=False,
+#                           verbose=True,
+#                           n_images=4
+#                           )
+
+# pcl = PointCloud(pcl_configs)
+
+# start = time.time()
+# pcd = pcl.create_multi_view_pcl(path4, n_images=16, resize=True)
+# t = time.time()-start
+
+
+# wt = Worktable()
+# wt.create_model(wt4)
   
-    fig3, ax3 = plt.subplots(1,3)
-    fig3.suptitle("Recon2Ref: Distance Metrics")
-    ax3[0].set_title("MSE")
-    ax3[1].set_title("RMSE")
-    ax3[2].set_title("MAE")
-    ax3[0].set_xlabel("n images")
-    ax3[0].set_ylabel("mm")
-    plt.tight_layout()
-    
-    fig4, ax4 = plt.subplots(1,3)
-    fig4.suptitle("Ref2Recon: Distance Metrics")
-    ax4[0].set_title("MSE")
-    ax4[1].set_title("RMSE")
-    ax4[2].set_title("MAE")
-    ax4[0].set_xlabel("n images")
-    ax4[0].set_ylabel("mm")
-    plt.tight_layout()
-    
-    for v in voxel_size:
-        
-        cts = []
-        mae1 = []
-        mse1 = []
-        rmse1 = []
-        mae2 = []
-        mse2 = []
-        rmse2 = []
-        mcd = []
-        
-       
-               
-        for n in n_imgs:
-                
-        
-            print(f"n_imgs: {n}, voxels: {v}")
+# wt.get_ref_wt(path=stl4, grid_size=grid_size, n_pts=n_pts)
+# wt.get_recon_wt(pcd)
 
-                
-            pcl_configs = PCLConfigs(outliers=False, 
-                                     pre_voxel_size=v, 
-                                     voxel_size=v,
-                                     hp_radius=75,
-                                     angle_thresh=75,
-                                     std_ratio_stat=2,
-                                     nb_points_stat=50,
-                                     nb_points_box=6,
-                                     box_radius=2*v,
-                                     registration_method="none",
-                                     filters=True
-                                     )
-            
-            
-            pcl = PointCloud(pcl_configs)
-            
-            start = time.time()
-            pcd = pcl.create_multi_view_pcl(path, n_images=n)
-            cts.append(time.time()-start)
-        
-        
-            wt = Worktable()
-            wt.create_model(wt_dict)
-              
-            wt.get_ref_wt(grid_size=grid_size, n_pts=n_pts)
-            wt.get_recon_wt(pcd)
-            
-            # print("Evaluating...")
-            # ret = wt.evaluate_grids()
-            cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
-            
-            mcd.append(mcd_)
-            mae1.append(recon2ref["mae"])
-            mse1.append(recon2ref["mse"])
-            rmse1.append(recon2ref["rmse"])
-            mae2.append(ref2recon["mae"])
-            mse2.append(ref2recon["mse"])
-            rmse2.append(ref2recon["rmse"])
-       
-        ax1.plot(n_imgs, mcd, label=f"{v} mm")
-        ax2.plot(n_imgs, cts, label=f"{v} mm")
-        ax3[0].plot(n_imgs, mse1, label=f"{v} mm")
-        ax3[1].plot(n_imgs, rmse1, label=f"{v} mm")
-        ax3[2].plot(n_imgs, mae1, label=f"{v} mm")
-        ax4[0].plot(n_imgs, mse2, label=f"{v} mm")
-        ax4[1].plot(n_imgs, rmse2, label=f"{v} mm")
-        ax4[2].plot(n_imgs, mae2, label=f"{v} mm")
-    
-    
-    
-    ymin = min(ax3[1].get_ylim() + ax3[2].get_ylim())
-    ymax = min(ax3[1].get_ylim() + ax3[2].get_ylim())
-    ax3[1].set_ylim(ymin,ymax)
-    ax3[2].set_ylim(ymin,ymax)
-    
-    ymin = min(ax4[1].get_ylim() + ax4[2].get_ylim())
-    ymax = min(ax4[1].get_ylim() + ax4[2].get_ylim())
-    ax4[1].set_ylim(ymin,ymax)
-    ax4[2].set_ylim(ymin,ymax)
-
-    
-
-    ax1.legend()
-    ax2.legend()
-    
-    handles, labels = ax3[0].get_legend_handles_labels()
-    fig3.legend(handles, labels, loc=7)
-    fig3.tight_layout()
-    fig3.subplots_adjust(right=0.75)
-    
-    handles, labels = ax4[0].get_legend_handles_labels()
-    fig4.legend(handles, labels, loc=7)
-    fig4.tight_layout()
-    fig4.subplots_adjust(right=0.75)
-    
-    fig1.savefig(os.path.join(out, "chamfer_dist.png"))
-    fig2.savefig(os.path.join(out, "comp_times.png"))
-    fig3.savefig(os.path.join(out, "Recon2Ref.png"))
-    fig4.savefig(os.path.join(out, "Ref2Recon.png"))
-    
-    
-    
-
-
-print(time.time()-eval_time)
+# # print("Evaluating...")
+# adjusted_rel_e, rel_e, missing_e, added_e, mean_e = wt.evaluate_grids()
+# cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
 
 
 
-
- 
-
-# path1 = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230514_164433" # wt1
-# path2 = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230514_173628" # wt2
-# path3 = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230522_163051" # wt3
-# path4 = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230522_140447" # wt4.2
-# # path4 = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230522_124653" # wt4.1
-# paths = [path1, path2, path3, path4]
-# wts = [wt1, wt2, wt3, wt4]
-
-# n_imgs = [4,8,16,32]
-# voxel_size = [0.001, 0.0025, 0.005, 0.0075, 0.01]
-# grid_size = 0.0075
-# samples = [250000]
-
-# n_imgs= [1,2]
-# voxel_size =[0.01, 0.0075]
-# grid_size = 0.0075
-# samples = [10000, 25000]
+# pcl2 = PointCloud(pcl_configs)
 
 
-# eval_time = time.time() 
-# for path, wt_dict in zip(paths, wts):
-    
-    
-#     computation_times = []
-#     mae1 = []
-#     mse1 = []
-#     rmse1 = []
-#     mae2 = []
-#     mse2 = []
-#     rmse2 = []
-#     mcd = []
-    
-#     fig1, ax1 = plt.subplots(1)
-#     ax1.set_title("Chamfer Distance")
-#     ax1.set_xlabel("n reference pcl samples")
-#     ax1.set_ylabel("mm")
-#     ax1.legend()
-    
-#     fig, ax = plt.subplots(1,3)
-#     fig.suptitle("Distance Metrics")
-#     ax[0].set_title("MAE")
-#     ax[1].set_title("MSE")
-#     ax[2].set_title("RMSE")
-#     ax[0].set_xlabel("n reference pcl samples")
-#     ax[0].set_ylabel("mm")
-#     plt.tight_layout()
-
-#     # ax.legend()
-
-        
-        
-    
-#     out = os.path.join(path, "eval", f"{n}_imgs")
-#     os.makedirs(out, exist_ok=True)
-        
-#     pcl_configs = PCLConfigs(outliers=False, 
-#                              pre_voxel_size=v, 
-#                              voxel_size=v,
-#                              hp_radius=75,
-#                              angle_thresh=75,
-#                              std_ratio_stat=2,
-#                              nb_points_stat=50,
-#                              nb_points_box=6,
-#                              box_radius=2*v,
-#                              registration_method="none",
-#                              filters=True
-#                              )
-    
-    
-#     pcl = PointCloud(pcl_configs)
-    
-#     start = time.time()
-#     pcd = pcl.create_multi_view_pcl(path, n_images=n)
-#     computation_times.append(time.time()-start)
-    
-    
-#     mean_dists = []
-    
-#     for n_pts in samples:
-        
-#         print(f"n_imgs: {n}, n_pts: {n_pts}")
-
-#         wt = Worktable()
-#         wt.create_model(wt_dict)
-          
-#         wt.get_ref_wt(grid_size=grid_size, n_pts=n_pts)
-#         wt.get_recon_wt(pcd)
-        
-#         # print("Evaluating...")
-#         # ret = wt.evaluate_grids()
-#         cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
-        
-#         mcd.append(mcd_)
-#         mae1.append(recon2ref["mae"])
-#         mse1.append(recon2ref["mse"])
-#         rmse1.append(recon2ref["rmse"])
-#         mae2.append(ref2recon["mae"])
-#         mse2.append(ref2recon["mse"])
-#         rmse2.append(ref2recon["rmse"])
-          
-    
-#     ax1.plot(samples, mcd, label=f"{n} imgs, {v} mm")
-
-
-# fig1.savefig(os.path.join(out, "chamfer_dist.png"))
-# fig2.savefig(os.path.join(out, "comp_times.png"))
-
-    
-    
-# wt.visualize(model=True)
-# wt.visualize(ref=True, model=True)
-# wt.visualize(recon=True)
-# wt.visualize(model=True, recon=True)
-# wt.visualize(diff=True)
-
-
-# ref = np.array(ret[0])
-# rec = np.array(ret[1])
-
-
-# mse = MSE(ref, rec)
-# rmse = RMSE(ref, rec)
-# mae = MAE(ref, rec)
-# me = ME(ref, rec)
-
-#################################################################33
-
-
-
-# path = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230514_173628"
-# pcl_file = os.path.join(path, "pcl_5_imgs.ply")
-# pcl = o3d.io.read_point_cloud(pcl_file)
+# start = time.time()
+# pcd2 = pcl2.create_multi_view_pcl(path4, n_images=16, run_s2d=cp2)
+# t = time.time()-start
 
 
 # wt2 = Worktable()
-# wt2.create_model(wt2)
+# wt2.create_model(wt4)
+  
+# wt2.get_ref_wt(path=stl4, grid_size=grid_size, n_pts=n_pts)
+# wt2.get_recon_wt(pcd2)
+
+# # print("Evaluating...")
+# adjusted_rel_e2, rel_e2, missing_e2, added_e2, mean_e2 = wt2.evaluate_grids()
+# cd_2, mcd_2, recon2ref2, ref2recon2 =  wt2.evaluate_pcl()
+
+
+
+
+# pcl3 = PointCloud(pcl_configs)
+
+
+# start = time.time()
+# pcd3 = pcl3.create_multi_view_pcl(path4, n_images=16)
+# t = time.time()-start
+
+
+# wt3 = Worktable()
+# wt3.create_model(wt4)
+  
+# wt3.get_ref_wt(path=stl4, grid_size=grid_size, n_pts=n_pts)
+# wt3.get_recon_wt(pcd3)
+
+# # print("Evaluating...")
+# adjusted_rel_e3, rel_e3, missing_e3, added_e3, mean_e3 = wt3.evaluate_grids()
+# cd_3, mcd_3, recon2ref3, ref2recon3 =  wt3.evaluate_pcl()
+
+
+###################################################################33
+
+# eval_time = time.time() 
+# print("Depth completion evaluation 2")
+ 
+# n_imgs = [4,8,16,24,32,48]
+# voxel_size = [0]
+# grid_size = 0.007
+# n_pts = 300000
+
+
+
+# # paths = [path1]
+# # wts =[wt1]
+# # names = ["wt1"]
+# # n_imgs= [1,2]
+# # voxel_size =[0.01,0.02]
+# # grid_size = 0.0075
+# # n_pts = 250000
+
+# cps = [cp1]
+
+# mean_e = pd.DataFrame(columns=["n_imgs"] + [_.split("/")[5] if _ else "None" for _ in cps ])
+
+# mean_e.iloc[:,0] = n_imgs
+# adjusted_e = mean_e.copy()
+# missing_e  = mean_e.copy()
+# added_e  = mean_e.copy()
+# e  = mean_e.copy()
+# mcd  = mean_e.copy()
+# mae1  = mean_e.copy()
+# mse1  = mean_e.copy()
+# rmse1  = mean_e.copy()
+# mae2  = mean_e.copy()
+# mse2  = mean_e.copy()
+# rmse2  = mean_e.copy()
+# cts  = mean_e.copy()
+
+# for i, (path, stl, wt_dict) in enumerate(zip(paths, stls, wts)):
+    
+    
+#     out = os.path.join(out_folder, names[i])
+#     os.makedirs(out, exist_ok=True)
+    
+    
+#     for v in voxel_size:
+        
+#         for cp in cps:
+            
+
+        
+#             for ii, n in enumerate(n_imgs):
+                    
+#                 torch.cuda.empty_cache()
+            
+#                 print(f"n_imgs: {n}, cp: {cp}")
+    
+                    
+#                 pcl_configs = PCLConfigs(outliers=False, 
+#                                           pre_voxel_size=v, 
+#                                           voxel_size=v,
+#                                           hp_radius=75,
+#                                           angle_thresh=75,
+#                                           std_ratio_stat=2,
+#                                           nb_points_stat=50,
+#                                           nb_points_box=6,
+#                                           box_radius=2*v,
+#                                           registration_method="none",
+#                                           filters=True,
+#                                           )
+                
+                
+#                 pcl = PointCloud(pcl_configs)
+                
+#                 start = time.time()
+#                 pcd = pcl.create_multi_view_pcl(path, n_images=n, run_s2d=cp, resize=True)
+#                 t = time.time()-start
+                
+#                 if cp:
+#                     col = cp.split("/")[5] 
+#                 else:
+#                     col = "None"
+                    
+#                 cts.loc[ii, col] = t           
+                
+            
+            
+#                 wt = Worktable()
+#                 wt.create_model(wt_dict)
+                  
+#                 wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
+#                 wt.get_recon_wt(pcd)
+                
+#                 # print("Evaluating...")
+#                 adjusted_e_, e_, missing_e_, added_e_, mean_e_ = wt.evaluate_grids()    
+#                 cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
+                
+               
+
+#                 mean_e.loc[ii, col] = mean_e_
+#                 adjusted_e.loc[ii, col] = adjusted_e_
+#                 e.loc[ii, col] = e_
+#                 missing_e.loc[ii, col] = missing_e_
+#                 added_e.loc[ii, col] = added_e_
+#                 mcd.loc[ii, col] = mcd_            
+#                 mae1.loc[ii, col] = recon2ref["mae"]
+#                 mse1.loc[ii, col] = recon2ref["mse"]
+#                 rmse1.loc[ii, col] = recon2ref["rmse"]
+#                 mae2.loc[ii, col] = ref2recon["mae"]
+#                 mse2.loc[ii, col] = ref2recon["mse"]
+#                 rmse2.loc[ii, col] = ref2recon["rmse"]
+        
+#     mean_e.to_csv(os.path.join(out, "resize_mean_e.csv"), index=False)    
+#     adjusted_e.to_csv(os.path.join(out, "resize_adjusted_e.csv"), index=False)
+#     e.to_csv(os.path.join(out, "resize_e.csv"), index=False)
+#     missing_e.to_csv(os.path.join(out, "resize_missing_e.csv"), index=False)
+#     added_e.to_csv(os.path.join(out, "resize_added_e.csv"), index=False)
+#     mcd.to_csv(os.path.join(out, "resize_mcd.csv"), index=False)
+#     mae1.to_csv(os.path.join(out, "resize_mae1.csv"), index=False)
+#     mse1.to_csv(os.path.join(out, "resize_mse1.csv"), index=False)
+#     rmse1.to_csv(os.path.join(out, "resize_rmse1.csv"), index=False)
+#     mae2.to_csv(os.path.join(out, "resize_mae2.csv"), index=False)
+#     mse2.to_csv(os.path.join(out, "resize_mse2.csv"), index=False)
+#     rmse2.to_csv(os.path.join(out, "resize_rmse2.csv"), index=False)
+#     cts.to_csv(os.path.join(out, "resize_cts.csv"), index=False)
     
 
-# start = time.time()
-# wt2.get_ref_wt(grid_size=grid_size, n_pts=n_pts)
-# print(f"{time.time()-start}s for ref_wt")
 
-# start = time.time()
-# wt2.get_recon_wt(pcl)
-# print(f"{time.time()-start}s for recon_wt")
+# print(time.time()-eval_time)
 
 
 
-# print("Evaluating...")
-# ret = wt2.evaluate()
+
+        
+        
 
 
-# # wt.visualize(model=True)
-# wt2.visualize(ref=True, model=True)
-# wt2.visualize(recon=True, model=True)
-# wt2.visualize(diff=True)
 
 
-# ref = np.array(ret[0])
-# rec = np.array(ret[1])
+
+# ########################################################################################3
+
+# print("Filter evaluation")
+
+# n_imgs = [4,8,16,24,32,48]
+# voxel_size = 0.0
+# filters = [True, False]
+# grid_size = 0.0075
+# n_pts = 300000
 
 
-# mse = MSE(ref, rec)
-# rmse = RMSE(ref, rec)
-# mae = MAE(ref, rec)
-# me = ME(ref, rec)
+
+# mean_e = pd.DataFrame(columns=["n_imgs"] + [str(f) for f in filters])
+
+# mean_e.iloc[:,0] = n_imgs
+# adjusted_e = mean_e.copy()
+# missing_e  = mean_e.copy()
+# added_e  = mean_e.copy()
+# e  = mean_e.copy()
+# mcd  = mean_e.copy()
+# mae1  = mean_e.copy()
+# mse1  = mean_e.copy()
+# rmse1  = mean_e.copy()
+# mae2  = mean_e.copy()
+# mse2  = mean_e.copy()
+# rmse2  = mean_e.copy()
+# cts  = mean_e.copy()
+
+
+# eval_time = time.time() 
+# for i, (path, stl, wt_dict) in enumerate(zip(paths, stls, wts)):
+    
+    
+#     out = os.path.join(out_folder, names[i])
+#     os.makedirs(out, exist_ok=True)
+    
+    
+#     for f in filters:
+        
+ 
+#         for ii, n in enumerate(n_imgs):
+                
+        
+#             print(f"n_imgs: {n}, filters: {f}")
+
+                
+#             pcl_configs = PCLConfigs(outliers=False, 
+#                                       pre_voxel_size=voxel_size, 
+#                                       voxel_size=voxel_size,
+#                                       hp_radius=75,
+#                                       angle_thresh=75,
+#                                       std_ratio_stat=2,
+#                                       nb_points_stat=50,
+#                                       nb_points_box=6,
+#                                       box_radius=2*voxel_size,
+#                                       registration_method="none",
+#                                       filters=f
+#                                       )
+            
+            
+#             pcl = PointCloud(pcl_configs)
+            
+#             start = time.time()
+#             pcd = pcl.create_multi_view_pcl(path, n_images=n)
+#             t = time.time()-start
+#             cts.loc[ii, str(f)] = t           
+            
+        
+        
+#             wt = Worktable()
+#             wt.create_model(wt_dict)
+              
+#             wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
+#             wt.get_recon_wt(pcd)
+            
+#             # print("Evaluating...")
+#             adjusted_e_, e_, missing_e_, added_e_, mean_e_ = wt.evaluate_grids()    
+#             cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
+                
+#             mean_e.loc[ii, str(f)] = mean_e_
+#             adjusted_e.loc[ii, str(f)] = adjusted_e_
+#             e.loc[ii, str(f)] = e_
+#             missing_e.loc[ii, str(f)] = missing_e_
+#             added_e.loc[ii, str(f)] = added_e_
+#             mcd.loc[ii, str(f)] = mcd_            
+#             mae1.loc[ii, str(f)] = recon2ref["mae"]
+#             mse1.loc[ii, str(f)] = recon2ref["mse"]
+#             rmse1.loc[ii, str(f)] = recon2ref["rmse"]
+#             mae2.loc[ii, str(f)] = ref2recon["mae"]
+#             mse2.loc[ii, str(f)] = ref2recon["mse"]
+#             rmse2.loc[ii, str(f)] = ref2recon["rmse"]
+        
+#     mean_e.to_csv(os.path.join(out, "filters_mean_e.csv"), index=False)    
+#     adjusted_e.to_csv(os.path.join(out, "filters_adjusted_e.csv"), index=False)
+#     e.to_csv(os.path.join(out, "filters_e.csv"), index=False)
+#     missing_e.to_csv(os.path.join(out, "filters_missing_e.csv"), index=False)
+#     added_e.to_csv(os.path.join(out, "filters_added_e.csv"), index=False)
+#     mcd.to_csv(os.path.join(out, "filters_mcd.csv"), index=False)
+#     mae1.to_csv(os.path.join(out, "filters_mae1.csv"), index=False)
+#     mse1.to_csv(os.path.join(out, "filters_mse1.csv"), index=False)
+#     rmse1.to_csv(os.path.join(out, "filters_rmse1.csv"), index=False)
+#     mae2.to_csv(os.path.join(out, "filters_mae2.csv"), index=False)
+#     mse2.to_csv(os.path.join(out, "filters_mse2.csv"), index=False)
+#     rmse2.to_csv(os.path.join(out, "filters_rmse2.csv"), index=False)
+#     cts.to_csv(os.path.join(out, "filters_cts.csv"), index=False)
+    
+# print(time.time()-eval_time)
+
+
+
+
+
+# ##########################################################################################
+
+
+
+
+# print("Voxel size evaluation")
+
+# n_imgs = [4,8,16,24,32, 48]
+# voxel_size = [0, 0.001, 0.0025, 0.005, 0.0075, 0.01]
+# grid_size = 0.007
+# n_pts = 300000
+
+
+
+# mean_e = pd.DataFrame(columns=["n_imgs"] + [str(v) for v in voxel_size])
+
+# mean_e.iloc[:,0] = n_imgs
+# adjusted_e = mean_e.copy()
+# missing_e  = mean_e.copy()
+# added_e  = mean_e.copy()
+# e  = mean_e.copy()
+# mcd  = mean_e.copy()
+# mae1  = mean_e.copy()
+# mse1  = mean_e.copy()
+# rmse1  = mean_e.copy()
+# mae2  = mean_e.copy()
+# mse2  = mean_e.copy()
+# rmse2  = mean_e.copy()
+# cts  = mean_e.copy()
+
+
+
+# eval_time = time.time() 
+# for i, (path, stl, wt_dict) in enumerate(zip(paths, stls, wts)):
+    
+    
+#     out = os.path.join(out_folder, names[i])
+#     os.makedirs(out, exist_ok=True)
+    
+    
+#     for v in voxel_size:
+        
+ 
+#         for ii, n in enumerate(n_imgs):
+                
+        
+#             print(f"n_imgs: {n}, voxels: {v}")
+
+                
+#             pcl_configs = PCLConfigs(outliers=False, 
+#                                       pre_voxel_size=v, 
+#                                       voxel_size=v,
+#                                       hp_radius=75,
+#                                       angle_thresh=75,
+#                                       std_ratio_stat=2,
+#                                       nb_points_stat=50,
+#                                       nb_points_box=6,
+#                                       box_radius=2*v,
+#                                       registration_method="none",
+#                                       filters=True
+#                                       )
+            
+            
+#             pcl = PointCloud(pcl_configs)
+            
+#             start = time.time()
+#             pcd = pcl.create_multi_view_pcl(path, n_images=n)
+#             t = time.time()-start
+#             cts.loc[ii, str(v)] = t           
+            
+        
+        
+#             wt = Worktable()
+#             wt.create_model(wt_dict)
+              
+#             wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
+#             wt.get_recon_wt(pcd)
+            
+#             # print("Evaluating...")
+#             adjusted_e_, e_, missing_e_, added_e_, mean_e_ = wt.evaluate_grids()    
+#             cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
+            
+             
+#             mean_e.loc[ii, str(v)] = mean_e_
+#             adjusted_e.loc[ii, str(v)] = adjusted_e_
+#             e.loc[ii, str(v)] = e_
+#             missing_e.loc[ii, str(v)] = missing_e_
+#             added_e.loc[ii, str(v)] = added_e_
+#             mcd.loc[ii, str(v)] = mcd_            
+#             mae1.loc[ii, str(v)] = recon2ref["mae"]
+#             mse1.loc[ii, str(v)] = recon2ref["mse"]
+#             rmse1.loc[ii, str(v)] = recon2ref["rmse"]
+#             mae2.loc[ii, str(v)] = ref2recon["mae"]
+#             mse2.loc[ii, str(v)] = ref2recon["mse"]
+#             rmse2.loc[ii, str(v)] = ref2recon["rmse"]
+        
+      
+#     mean_e.to_csv(os.path.join(out, "vs_mean_e.csv"), index=False)
+#     adjusted_e.to_csv(os.path.join(out, "vs_adjusted_e.csv"), index=False)
+#     e.to_csv(os.path.join(out, "vs_e.csv"), index=False)
+#     missing_e.to_csv(os.path.join(out, "vs_missing_e.csv"), index=False)
+#     added_e.to_csv(os.path.join(out, "vs_added_e.csv"), index=False)
+#     mcd.to_csv(os.path.join(out, "vs_mcd.csv"), index=False)
+#     mae1.to_csv(os.path.join(out, "vs_mae1.csv"), index=False)
+#     mse1.to_csv(os.path.join(out, "vs_mse1.csv"), index=False)
+#     rmse1.to_csv(os.path.join(out, "vs_rmse1.csv"), index=False)
+#     mae2.to_csv(os.path.join(out, "vs_mae2.csv"), index=False)
+#     mse2.to_csv(os.path.join(out, "vs_mse2.csv"), index=False)
+#     rmse2.to_csv(os.path.join(out, "vs_rmse2.csv"), index=False)
+#     cts.to_csv(os.path.join(out, "vs_cts.csv"), index=False)
+    
+# print(time.time()-eval_time)
+
+
+
+
+
+# #########################################################################################
+
+# eval_time = time.time() 
+# print("Depth completion evaluation")
+ 
+# n_imgs = [4,8,16,24,32,48]
+# voxel_size = [0]
+# grid_size = 0.007
+# n_pts = 300000
+
+# cps = [cp1, cp2, cp3, cp4]
+
+
+# # paths = [path1]
+# # wts =[wt1]
+# # names = ["wt1"]
+# # n_imgs= [1,2]
+# # voxel_size =[0.01,0.02]
+# # grid_size = 0.0075
+# # n_pts = 250000
+
+
+# mean_e = pd.DataFrame(columns=["n_imgs"] + [_.split("/")[5] if _ else "None" for _ in cps ])
+
+# mean_e.iloc[:,0] = n_imgs
+# adjusted_e = mean_e.copy()
+# missing_e  = mean_e.copy()
+# added_e  = mean_e.copy()
+# e  = mean_e.copy()
+# mcd  = mean_e.copy()
+# mae1  = mean_e.copy()
+# mse1  = mean_e.copy()
+# rmse1  = mean_e.copy()
+# mae2  = mean_e.copy()
+# mse2  = mean_e.copy()
+# rmse2  = mean_e.copy()
+# cts  = mean_e.copy()
+
+# for i, (path, stl, wt_dict) in enumerate(zip(paths, stls, wts)):
+    
+    
+#     out = os.path.join(out_folder, names[i])
+#     os.makedirs(out, exist_ok=True)
+    
+    
+#     for v in voxel_size:
+        
+#         for cp in cps:
+            
+
+        
+#             for ii, n in enumerate(n_imgs):
+                    
+#                 torch.cuda.empty_cache()
+            
+#                 print(f"n_imgs: {n}, cp: {cp}")
+    
+                    
+#                 pcl_configs = PCLConfigs(outliers=False, 
+#                                           pre_voxel_size=v, 
+#                                           voxel_size=v,
+#                                           hp_radius=75,
+#                                           angle_thresh=75,
+#                                           std_ratio_stat=2,
+#                                           nb_points_stat=50,
+#                                           nb_points_box=6,
+#                                           box_radius=2*v,
+#                                           registration_method="none",
+#                                           filters=True
+#                                           )
+                
+                
+#                 pcl = PointCloud(pcl_configs)
+                
+#                 start = time.time()
+#                 pcd = pcl.create_multi_view_pcl(path, n_images=n, run_s2d=cp)
+#                 t = time.time()-start
+                
+#                 if cp:
+#                     col = cp.split("/")[5] 
+#                 else:
+#                     col = "None" 
+                    
+#                 cts.loc[ii, col] = t           
+                
+            
+            
+#                 wt = Worktable()
+#                 wt.create_model(wt_dict)
+                  
+#                 wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
+#                 wt.get_recon_wt(pcd)
+                
+#                 # print("Evaluating...")
+#                 adjusted_e_, e_, missing_e_, added_e_, mean_e_ = wt.evaluate_grids()    
+#                 cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
+                
+              
+
+#                 mean_e.loc[ii, col] = mean_e_
+#                 adjusted_e.loc[ii, col] = adjusted_e_
+#                 e.loc[ii, col] = e_
+#                 missing_e.loc[ii, col] = missing_e_
+#                 added_e.loc[ii, col] = added_e_
+#                 mcd.loc[ii, col] = mcd_            
+#                 mae1.loc[ii, col] = recon2ref["mae"]
+#                 mse1.loc[ii, col] = recon2ref["mse"]
+#                 rmse1.loc[ii, col] = recon2ref["rmse"]
+#                 mae2.loc[ii, col] = ref2recon["mae"]
+#                 mse2.loc[ii, col] = ref2recon["mse"]
+#                 rmse2.loc[ii, col] = ref2recon["rmse"]
+        
+#     mean_e.to_csv(os.path.join(out, "ml_mean_e.csv"), index=False)    
+#     adjusted_e.to_csv(os.path.join(out, "ml_adjusted_e.csv"), index=False)
+#     e.to_csv(os.path.join(out, "ml_e.csv"), index=False)
+#     missing_e.to_csv(os.path.join(out, "ml_missing_e.csv"), index=False)
+#     added_e.to_csv(os.path.join(out, "ml_added_e.csv"), index=False)
+#     mcd.to_csv(os.path.join(out, "ml_mcd.csv"), index=False)
+#     mae1.to_csv(os.path.join(out, "ml_mae1.csv"), index=False)
+#     mse1.to_csv(os.path.join(out, "ml_mse1.csv"), index=False)
+#     rmse1.to_csv(os.path.join(out, "ml_rmse1.csv"), index=False)
+#     mae2.to_csv(os.path.join(out, "ml_mae2.csv"), index=False)
+#     mse2.to_csv(os.path.join(out, "ml_mse2.csv"), index=False)
+#     rmse2.to_csv(os.path.join(out, "ml_rmse2.csv"), index=False)
+#     cts.to_csv(os.path.join(out, "ml_cts.csv"), index=False)
+    
+
+
+# print(time.time()-eval_time)
+
+# ###################################################################################333
+
+# print("Calibration evaluation")
+
+# n_imgs = [4,8,16,24,32,48]
+# voxel_size = 0.0
+# filters = [True, False]
+# grid_size = 0.0075
+# n_pts = 300000
+# calibration = [True, False]
+
+
+# mean_e = pd.DataFrame(columns=["n_imgs"] + [str(f) for f in calibration])
+
+# mean_e.iloc[:,0] = n_imgs
+# adjusted_e = mean_e.copy()
+# missing_e  = mean_e.copy()
+# added_e  = mean_e.copy()
+# e  = mean_e.copy()
+# mcd  = mean_e.copy()
+# mae1  = mean_e.copy()
+# mse1  = mean_e.copy()
+# rmse1  = mean_e.copy()
+# mae2  = mean_e.copy()
+# mse2  = mean_e.copy()
+# rmse2  = mean_e.copy()
+# cts  = mean_e.copy()
+
+
+# eval_time = time.time() 
+# for i, (path, stl, wt_dict) in enumerate(zip(paths, stls, wts)):
+    
+    
+#     out = os.path.join(out_folder, names[i])
+#     os.makedirs(out, exist_ok=True)
+    
+    
+#     for c in calibration:
+        
+ 
+#         for ii, n in enumerate(n_imgs):
+                
+        
+#             print(f"n_imgs: {n}, calibration: {c}")
+
+#             if not c:
+#                 pcl_configs = PCLConfigs(outliers=False, 
+#                                           pre_voxel_size=voxel_size, 
+#                                           voxel_size=0.001,
+#                                           hp_radius=75,
+#                                           angle_thresh=75,
+#                                           std_ratio_stat=2,
+#                                           nb_points_stat=50,
+#                                           nb_points_box=6,
+#                                           box_radius=2*voxel_size,
+#                                           registration_method="plane",
+#                                           filters=True,
+#                                           verbose=False,
+#                                           n_images=n
+#                                           )
+                
+#                 offset_params = OffsetParameters()
+                
+#                 K, _, _ = loadIntrinsics()
+                
+#                 pcl = PointCloud2(pcl_configs, offset_params)
+                
+#                 start = time.time()
+#                 pcl.load_PCL_from_depth(path, K)
+#                 pcl.ProcessPCL()
+#                 pcd = pcl.unified_pcl
+#                 t = time.time()-start
+                
+            
+#             if c:  
+#                 pcl_configs = PCLConfigs(outliers=False, 
+#                                           pre_voxel_size=voxel_size, 
+#                                           voxel_size=0.001,
+#                                           hp_radius=75,
+#                                           angle_thresh=75,
+#                                           std_ratio_stat=2,
+#                                           nb_points_stat=50,
+#                                           nb_points_box=6,
+#                                           box_radius=2*voxel_size,
+#                                           registration_method="none",
+#                                           filters=True,
+#                                           verbose=False
+#                                           )
+                
+#                 pcl = PointCloud(pcl_configs)
+                
+#                 start = time.time()
+#                 pcd = pcl.create_multi_view_pcl(path, n_images=n)
+#                 t = time.time()-start
+                          
+#             cts.loc[ii, str(c)] = t           
+            
+        
+        
+#             wt = Worktable()
+#             wt.create_model(wt_dict)
+              
+#             wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
+#             wt.get_recon_wt(pcd)
+            
+#             # print("Evaluating...")
+#             adjusted_e_, e_, missing_e_, added_e_, mean_e_ = wt.evaluate_grids()    
+#             cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
+                
+            
+#             mean_e.loc[ii, str(c)] = mean_e_
+#             adjusted_e.loc[ii, str(c)] = adjusted_e_
+#             e.loc[ii, str(c)] = e_
+#             missing_e.loc[ii, str(c)] = missing_e_
+#             added_e.loc[ii, str(c)] = added_e_
+#             mcd.loc[ii, str(c)] = mcd_            
+#             mae1.loc[ii, str(c)] = recon2ref["mae"]
+#             mse1.loc[ii, str(c)] = recon2ref["mse"]
+#             rmse1.loc[ii, str(c)] = recon2ref["rmse"]
+#             mae2.loc[ii, str(c)] = ref2recon["mae"]
+#             mse2.loc[ii, str(c)] = ref2recon["mse"]
+#             rmse2.loc[ii, str(c)] = ref2recon["rmse"]
+        
+#     mean_e.to_csv(os.path.join(out, "calibration_mean_e.csv"), index=False)
+#     adjusted_e.to_csv(os.path.join(out, "calibration_adjusted_e.csv"), index=False)
+#     e.to_csv(os.path.join(out, "calibration_e.csv"), index=False)
+#     missing_e.to_csv(os.path.join(out, "calibration_missing_e.csv"), index=False)
+#     added_e.to_csv(os.path.join(out, "calibration_added_e.csv"), index=False)
+#     mcd.to_csv(os.path.join(out, "calibration_mcd.csv"), index=False)
+#     mae1.to_csv(os.path.join(out, "calibration_mae1.csv"), index=False)
+#     mse1.to_csv(os.path.join(out, "calibration_mse1.csv"), index=False)
+#     rmse1.to_csv(os.path.join(out, "calibration_rmse1.csv"), index=False)
+#     mae2.to_csv(os.path.join(out, "calibration_mae2.csv"), index=False)
+#     mse2.to_csv(os.path.join(out, "calibration_mse2.csv"), index=False)
+#     rmse2.to_csv(os.path.join(out, "calibration_rmse2.csv"), index=False)
+#     cts.to_csv(os.path.join(out, "calibration_cts.csv"), index=False)
+    
+# print(time.time()-eval_time)
+
+
+
+
 
 
 

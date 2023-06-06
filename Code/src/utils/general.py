@@ -13,10 +13,11 @@ import shutil
 import pickle
 import json
 import torch
-
+import argparse
 
 from dataclasses import dataclass
-
+from CoordConv import AddCoordsNp
+from dataloaders.transforms import ToTensor
 
 @dataclass
 class ConfigBase:
@@ -94,7 +95,8 @@ class PCLConfigs(ConfigBase):
     # m
     border_x: tuple = (-0.01, 0.800)
     border_y: tuple = (-0.01, 0.600)
-    border_z: tuple = (-0.01, 0.175)
+    border_z: tuple = (-0.01, 0.1575)
+    # border_z: tuple = (-0.01, 0.175)
     
     #########################################
     # filters
@@ -133,6 +135,7 @@ class PCLConfigs(ConfigBase):
     color: str = None
     
     n_images: int = 8
+    
     
     
 @dataclass
@@ -446,25 +449,38 @@ def loadIntrinsics(path=None):
     return K_d, K_c, intrinsics
   
 def prepare_s2d_input(img, depth, K):
-    
-    crop_size = (228, 304)
-    img, ratio = ResizeWithAspectRatio(img, height=240)
-    # depth_, _ = ResizeWithAspectRatio(depth, height=240)
-    depth, K_new = ResizeViaProjection(depth, K, out_size=(240,424))
-    
-    cur_size = img.shape
-    diff = (cur_size[0]-crop_size[0], cur_size[1]-crop_size[1])
-    K_new[0,2] -= diff[1]/2
-    K_new[1,2] -= diff[0]/2
-    
-    img = Crop(img, crop_size)
-    depth = Crop(depth, crop_size)
-    rgb = np.asfarray(img, dtype='float32') / 255
-    depth = np.asfarray(depth, dtype="float32")
-    rgbd = np.append(rgb, np.expand_dims(depth, axis=2), axis=2)
-    rgbd = torch.from_numpy(rgbd.transpose((2, 0, 1)).copy())
-    
-    return rgbd.unsqueeze(0), img, depth, K_new
+     
+     crop_size = (224, 416)
+     img, ratio = ResizeWithAspectRatio(img, height=240)
+     # depth_, _ = ResizeWithAspectRatio(depth, height=240)
+     depth, K_new = ResizeViaProjection(depth, K, out_size=(240,424))
+     
+     cur_size = img.shape
+     diff = (cur_size[0]-crop_size[0], cur_size[1]-crop_size[1])
+     K_new[0,2] -= diff[1]/2
+     K_new[1,2] -= diff[0]/2
+     
+     img = Crop(img, crop_size)
+     depth = Crop(depth, crop_size)
+     rgb = np.asfarray(img, dtype='float32') / 255
+     depth = np.asfarray(depth, dtype="float32")
+     depth = np.expand_dims(depth, -1)        
+
+     position = AddCoordsNp(224, 416)
+     position = position.call()
+     
+     candidates = {"rgb": rgb, "d": depth, "gt": depth, \
+                   'position': position, 'K': K_new}
+     
+     to_tensor = ToTensor()
+     to_float_tensor = lambda x: to_tensor(x).float()
+
+     items = {
+         key: to_float_tensor(val).unsqueeze(0)
+         for key, val in candidates.items() if val is not None
+     }
+  
+     return items
     
 
 def ME(x,y):
@@ -498,4 +514,28 @@ def RMSE(x,y):
     
     return rmse                                                       
 
+
+# parser = argparse.ArgumentParser(description='Sparse-to-Dense')
+# parser.add_argument('-n',
+#                     '--network-model',
+#                     type=str,
+#                     default="pe",
+#                     choices=["e", "pe"],
+#                     help='choose a model: enet or penet'
+#                     )
+# parser.add_argument('--cpu',
+#                     type=bool,
+#                     default=True
+#                     )
+# #geometric encoding
+# parser.add_argument('-co', '--convolutional-layer-encoding', default="xyz", type=str,
+#                     choices=["std", "z", "uv", "xyz"],
+#                     help='information concatenated in encoder convolutional layers')
+
+# #dilated rate of DA-CSPN++
+# parser.add_argument('-d', '--dilation-rate', default="2", type=int,
+#                     choices=[1, 2, 4],
+#                     help='CSPN++ dilation rate')
+
+# args = parser.parse_args()
 

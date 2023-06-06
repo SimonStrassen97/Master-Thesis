@@ -45,9 +45,10 @@ class PointCloud2():
     def ProcessPCL(self):
           
         for i,pcl in enumerate(self.pcls_):
-            print("---------------------")
-            print(f"{i+1}/{len(self.pcls_)}")
-            print("---------------------")
+            if self.configs.verbose:
+                print("---------------------")
+                print(f"{i+1}/{len(self.pcls_)}")
+                print("---------------------")
             
             self.idx = self.idx_list[i]
             self.pcl = copy.deepcopy(pcl)
@@ -76,12 +77,12 @@ class PointCloud2():
         self.ArmToWorld()
         # self.unified_pcl = self.unified_pcl.uniform_down_sample(4)
             
-        if self.configs.vis:
-            self.visualize(self.unified_pcl,
-                           coord_frame=self.configs.coord_frame,
-                           coord_scale=self.configs.coord_scale,
-                           outliers=self.configs.outliers,
-                           color=self.configs.color)
+        # if self.configs.vis:
+        #     self.visualize(self.unified_pcl,
+        #                    coord_frame=self.configs.coord_frame,
+        #                    coord_scale=self.configs.coord_scale,
+        #                    outliers=self.configs.outliers,
+        #                    color=self.configs.color)
             
                    
         
@@ -164,8 +165,8 @@ class PointCloud2():
         
     
         ind = np.where(self.angles>self.configs.angle_thresh)[0]
-        
-        print(f"View direction filter removed {len(self.pcl.points)-len(ind)} points.")
+        if self.configs.verbose:
+            print(f"View direction filter removed {len(self.pcl.points)-len(ind)} points.")
         outlier_cloud = self.pcl.select_by_index(ind, invert=True)
         self.pcl = self.pcl.select_by_index(ind)
         
@@ -182,7 +183,8 @@ class PointCloud2():
     def _removeHiddenPts(self):
               
         _, ind = self.pcl.hidden_point_removal(self.pose_data[self.idx,5:8]/1000, self.configs.hp_radius)
-        print(f"Hidden Points filter removed {len(self.pcl.points)-len(ind)} points.")
+        if self.configs.verbose:
+            print(f"Hidden Points filter removed {len(self.pcl.points)-len(ind)} points.")
         outlier_cloud = self.pcl.select_by_index(ind, invert=True)
         self.pcl = self.pcl.select_by_index(ind)
         
@@ -193,11 +195,12 @@ class PointCloud2():
         
     def _removeOutliers(self):
         
-        _, ind = self.pcl.remove_statistical_outlier(nb_neighbors=50,
-                                                    std_ratio=self.configs.std_ratio)
+        _, ind = self.pcl.remove_statistical_outlier(nb_neighbors=self.configs.nb_points_stat,
+                                                    std_ratio=self.configs.std_ratio_stat)
         
-        
-        print(f"Outlier filter removed {len(self.pcl.points)-len(ind)} points.")
+        if self.configs.verbose:
+
+            print(f"Outlier filter removed {len(self.pcl.points)-len(ind)} points.")
         # cl, self.ind = self.pcl_r.remove_radius_outlier(nb_points=5, radius=0.020)
         
         outlier_cloud1 = self.pcl.select_by_index(ind, invert=True)
@@ -251,7 +254,8 @@ class PointCloud2():
         
         
         ind = np.where(condition)[0]
-        print(f"Position filter removed {len(self.pcl.points)-len(ind)} points.")
+        if self.configs.verbose:
+            print(f"Position filter removed {len(self.pcl.points)-len(ind)} points.")
         outlier_cloud = self.pcl.select_by_index(ind, invert=True)
         self.pcl = self.pcl.select_by_index(ind)
         

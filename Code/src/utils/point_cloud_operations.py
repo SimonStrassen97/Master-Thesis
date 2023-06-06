@@ -10,8 +10,9 @@ import copy
 import numpy as np
 import open3d as o3d
 import cv2
-import torch
+# import torch
 import json
+
 
 from scipy.spatial.transform import Rotation as Rot
 
@@ -19,8 +20,7 @@ from utils.general import ResizeWithAspectRatio, Crop, ResizeViaProjection
 from utils.general import projectPoints, deprojectPoints
 from utils.general import prepare_s2d_input, loadIntrinsics
 
-torch.cuda.empty_cache()
-
+from model import PENet_C2_train, PENet_C2
 
 
 class PointCloud():
@@ -43,6 +43,7 @@ class PointCloud():
         self.idx = None
         
         self.outliers = []
+        self.ml_model = None
 
 
     def load_data(self, dpath, ipath, data_path):
@@ -81,13 +82,14 @@ class PointCloud():
         return pcl
     
         
-    def create_multi_view_pcl(self, path, n_images=5, run_s2d=""):
+    def create_multi_view_pcl(self, path, n_images=5, run_s2d="", resize=False):
         
         
         if not self.K:
             self._loadIntrinsics(path)
             
         dfiles, ifiles, data_files = self._get_file_names(path, n_images)
+        print(dfiles)
         
         # print(dfiles,ifiles,data_files)
         
@@ -101,9 +103,18 @@ class PointCloud():
             depth, img, data = self.load_data(d,i,dd)
             K = self.K
         
+            if resize:
+                inp = self._prepare_s2d_input(img, depth, K)
+                K_new = inp["K"].squeeze().numpy()
+                img = (inp["rgb"].squeeze().numpy().transpose(1,2,0) * 255).astype(np.uint16)
+                depth = inp["d"].squeeze().numpy()
+                
+                K = K_new
+                
+                
             if run_s2d:
                 
-                img, depth, K_new = self.run_s2d(run_s2d, img, depth)
+                img, raw_depth, depth, K_new = self.run_s2d(run_s2d, img, depth, K)
                 K = K_new
             
             
@@ -127,9 +138,14 @@ class PointCloud():
         if self.configs.voxel_size:
             
             self.unified_pcl = self.unified_pcl.voxel_down_sample(voxel_size=self.configs.voxel_size)
+            # _, ind = self.unified_pcl.remove_radius_outlier(nb_points=30, radius=0.005)
+            # _, ind = pcl.remove_statistical_outlier(nb_neighbors=self.configs.nb_points_stat, std_ratio=self.configs.std_ratio_stat)
+            # self.unified_pcl = self.unified_pcl.select_by_index(ind)
             
-        
-        # self.remove_outliers(self.unified_pcl)
+        if self.ml_model:
+            
+            del self.ml_model
+            torch.cuda.empty_cache()
             
         return self.unified_pcl
         
@@ -259,19 +275,33 @@ class PointCloud():
             
         return pcl
     
-    def run_s2d(self, model_path, img, depth):
+    def run_s2d(self, model_path, img, depth, K):
         
-        checkpoint = torch.load(model_path) 
-        model = checkpoint["model"]
-        model.eval()
-        inp, img, depth, K_new = self._prepareS2Dinput(img, depth, self.K)
-        pred = model(inp)
+        
+        torch.cuda.empty_cache()
+        if not self.ml_model:
+            checkpoint = torch.load(model_path, map_location="cpu")
+            args = checkpoint["args"]
+            args.cpu =  True
+            self.ml_model = PENet_C2(args)
+            self.ml_model.load_state_dict(checkpoint['model'], strict=False) 
+            self.ml_model.eval()
+            self.ml_model.to("cpu")
+
+        
+        inp = self._prepare_s2d_input(img, depth, K)
+        K_new = inp["K"].squeeze().numpy()
+        img = (inp["rgb"].squeeze().numpy().transpose(1,2,0) * 255).astype(np.uint16)
+        depth = inp["d"].squeeze().numpy()
+        
+        with torch.no_grad():
+            pred = self.ml_model(inp)
+            
         pred = pred.detach().cpu().squeeze().numpy()
-        filled = depth.copy()
-        filled[depth==0] = pred[depth==0]
-        
-        return pred
-    
+        # filled = depth.copy()
+        # filled[depth==0] = pred[depth==0
+        return img, depth, pred, K_new
+      
     def icp_registration(self, pcl):
         
         target = self.pcls[0]

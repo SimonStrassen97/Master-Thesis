@@ -98,9 +98,13 @@ class Object():
     def create_obj(self):
         
         if isinstance(self.size, np.ndarray):
-            self.mesh = o3d.geometry.TriangleMesh.create_box(width=self.size[0],
-                                                             height=self.size[1],
-                                                             depth=self.size[2])
+            if np.all(self.size) != 0:
+                self.mesh = o3d.geometry.TriangleMesh.create_box(width=self.size[0],
+                                                                 height=self.size[1],
+                                                                 depth=self.size[2])
+            else:
+                self.mesh = self.mesh = o3d.geometry.TriangleMesh()
+                
             self.mesh.compute_vertex_normals()
     
 
@@ -131,6 +135,7 @@ class Worktable():
         
         self.meshes = []
         self.model_mesh = o3d.geometry.TriangleMesh()
+        self.cad_mesh = o3d.geometry.TriangleMesh()
         self.recon_mesh = o3d.geometry.TriangleMesh()
         self.ref_mesh = o3d.geometry.TriangleMesh()
         self.diff_mesh = o3d.geometry.TriangleMesh()
@@ -138,7 +143,7 @@ class Worktable():
         self.ref_pcl =  o3d.geometry.PointCloud()
         self.recon_pcl = o3d.geometry.PointCloud()
         
-        self.grid_size=  None
+        self.grid_size =  None
         
     
     def create_model(self, wt_dict):
@@ -173,11 +178,9 @@ class Worktable():
         
         collection = []
         
-        ref_pts = np.array([])
-        if self.ref_pcl.points:
-            ref_pts = np.asarray(self.ref_pcl.points)
-        
         pts = np.asarray(pcl.points)
+     
+    
         x_max = pts[:,0].max()
         x_min = pts[:,0].min()
         y_max = pts[:,1].max()
@@ -185,16 +188,23 @@ class Worktable():
         z_max = pts[:,2].max()
         z_min = pts[:,2].min()
         
-        
         x_grid = np.arange(round(x_max/self.grid_size)+1)*self.grid_size
         y_grid = np.arange(round(y_max/self.grid_size)+1)*self.grid_size
         
         xx, yy = np.meshgrid(x_grid, y_grid)
         
+        
+        self.diff_heatmap = np.zeros(yy.T.shape)
+        self.ref_heatmap = np.zeros(yy.T.shape)
+        self.recon_heatmap = np.zeros(yy.T.shape)
+            # ref_pts = ref_pts[ref_pts[:, 0].argsort()]
+            
+        
+        
         objects = []
         
         norm = Normalize(vmin=0, vmax=0.1)
-        cmap = cm.autumn
+        cmap = cm.Greens
         color_mapping = cm.ScalarMappable(norm=norm, cmap=cmap)
 
         for x_lower in x_grid:
@@ -203,65 +213,49 @@ class Worktable():
                 x_upper = x_lower + self.grid_size
                 y_upper = y_lower + self.grid_size
                 
+      
+                condition_x = np.logical_and((pts[:,0] < x_upper), (pts[:,0] > x_lower))
+                condition_y = np.logical_and((pts[:,1] < y_upper), (pts[:,1] > y_lower))
+                candidates = np.where(np.logical_and(condition_x, condition_y))[0]
                 
-                # check if grid cell is empty or not
-                in_xy=True
-                if len(ref_pts):
-        
-                    # in_x = (ref_pts[:,0] < x_upper).max() &  (ref_pts[:,0] > x_lower).max()
-                    # in_y = (ref_pts[:,1] < y_upper).max() & (ref_pts[:,1] > y_lower).max()
-                    # in_xy = in_x & in_y
-                    
-                    condition_x = np.logical_and((ref_pts[:,0] < x_upper), (ref_pts[:,0] > x_lower))
-                    condition_y = np.logical_and((ref_pts[:,1] < y_upper), (ref_pts[:,1] > y_lower))
-                    candidates = np.where(np.logical_and(condition_x, condition_y))[0]
-                    if not candidates.size:
-                        in_xy = False
-                    
-                    
-               
-                if not in_xy:
-                    continue
-               
+                        
+                if candidates.size:
+                    # z_min = pts[candidates, 2].min()
+                    z_lower =-0.004
+                    z_upper = pts[candidates, 2].max() if pts[candidates, 2].max()>0 else 0
+                
                 else:
-                    condition_x = np.logical_and((pts[:,0] < x_upper), (pts[:,0] > x_lower))
-                    condition_y = np.logical_and((pts[:,1] < y_upper), (pts[:,1] > y_lower))
-                    candidates = np.where(np.logical_and(condition_x, condition_y))[0]
-                    
-                            
-                    if candidates.size:
-                        # z_min = pts[candidates, 2].min()
-                        z_lower =-0.004
-                        z_upper = pts[candidates, 2].max() if pts[candidates, 2].max()>0 else 0
-                    
-                    
-                    # else:
-                    #     z_lower =-0.004
-                    #     z_upper = 0
-                    
-                        p1 = np.array([x_lower, y_lower, z_lower])
-                        p2 = np.array([x_upper, y_upper, z_upper])
-                                        
-                        color = color_mapping.to_rgba(z_upper)[:3]
-                        
-                        obj_info = {
-                            "size": [self.grid_size,self.grid_size, z_upper-z_lower],
-                            "name": "Grid_cell",
-                            "color": color,
-                            "scale": "m"
-                            }
-                        
-                        obj = Object(obj_info)
-                        obj.set_corner(p1)
-                        obj.create_obj()
-                        
-                        objects.append(obj)
+                    z_lower = -0.004
+                    z_upper = z_lower
+                
+                # else:
+                #     z_lower =-0.004
+                #     z_upper = 0
+                
+                p1 = np.array([x_lower, y_lower, z_lower])
+                p2 = np.array([x_upper, y_upper, z_upper])
+                                
+                color = color_mapping.to_rgba(z_upper)[:3]
+                
+                obj_info = {
+                    "size": [self.grid_size,self.grid_size, z_upper-z_lower],
+                    "name": "Grid_cell",
+                    "color": color,
+                    "scale": "m"
+                    }
+                
+                obj = Object(obj_info)
+                obj.set_corner(p1)
+                obj.create_obj()
+                
+                objects.append(obj)
                                     
                 
         return objects
                 
-                
-    def get_ref_wt(self, grid_size=0.01, n_pts=250000):
+           
+        
+    def get_ref_wt(self, path="", grid_size=0.01, n_pts=250000):
         
         if not self.model:
             
@@ -274,7 +268,22 @@ class Worktable():
         if not self.grid_size:
             self.grid_size=grid_size
         
-        pcl = self.mesh_to_pcl(self.model_mesh, n_pts=n_pts)
+        if path:
+            mesh = o3d.io.read_triangle_mesh(path)
+            vertices = np.array(mesh.vertices)/1000
+            mesh.vertices = o3d.utility.Vector3dVector(vertices)
+            mesh.compute_vertex_normals()
+            
+            self.cad_mesh = mesh
+            pcl = self.mesh_to_pcl(self.cad_mesh, n_pts=n_pts)
+            
+            pts = np.array(pcl.points)
+            idx = np.where(pts[:,2]>=0)[0]
+            pcl = pcl.select_by_index(idx)
+        
+        else:
+            
+            pcl = self.mesh_to_pcl(self.model_mesh, n_pts=n_pts)
 
         objs = self.gridify_pcl(pcl)
         
@@ -290,13 +299,9 @@ class Worktable():
         
         if not self.grid_size:
             self.grid_size=grid_size
-            
-        objs = self.gridify_pcl(pcl)
-
-        self.recon += objs
         
         if self.ref_pcl.points:
-            self.crop_recon_pcl()
+            pcl = self.crop_recon_pcl()
                  
         
     def compile_mesh(self):
@@ -327,6 +332,7 @@ class Worktable():
             
             self.meshes.append(self.diff_mesh)
             
+        self.meshes.append(self.cad_mesh)            
             
     def crop_recon_pcl(self):
         
@@ -365,10 +371,14 @@ class Worktable():
         pcl = pcl.select_by_index(idx)
         
         self.recon_pcl = pcl
+        
+        return pcl
                 
     def mesh_to_pcl(self, mesh, n_pts=1000000):
         
         pcl = mesh.sample_points_uniformly(number_of_points=n_pts)
+        pts = np.array(pcl.points)
+        # print(pts[:,2].max())
         # pcl = mesh.sample_points_poisson_disk(number_of_points=n_pts)
         
         return pcl
@@ -380,6 +390,9 @@ class Worktable():
     
         ae1 = np.array(dist_recon2ref)
         ae2 = np.array(dist_ref2recon)
+        
+        max_ae1 = abs(ae1).max()
+        max_ae2 = abs(ae2).max()
         
         se1 = np.square(ae1)
         se2 = np.square(ae2)
@@ -396,109 +409,157 @@ class Worktable():
         cd = np.sum(se1) + np.sum(se2)
         mcd = cd/(len(ae1)+len(ae2))
         
-        recon2ref = {"mae": mae1, "mse": mse1, "rmse": rmse1}
-        ref2recon = {"mae": mae2, "mse": mse2, "rmse": rmse2}
+        recon2ref = {"mae": mae1, "mse": mse1, "rmse": rmse1, "max": max_ae1}
+        ref2recon = {"mae": mae2, "mse": mse2, "rmse": rmse2, "max": max_ae2}
     
         return cd, mcd, recon2ref, ref2recon
             
-        
-    
-    
-    
-    
+
 
     def evaluate_grids(self):
         
         
-        z_ref_ = []
-        z_recon_ = []
         z_diff_ = []
+        z_ref_ = []
     
-        if not self.recon:
-            self.get_ref_wt()
+        pts = np.array(self.recon_pcl.points)
         
         if not self.ref:
             raise ValueError("No reference")
             
             
-        norm = Normalize(vmin=-0.1, vmax=0.1)
-        cmap = cm.autumn
-        cmap = cm.viridis
-        color_mapping = cm.ScalarMappable(norm=norm, cmap=cmap)
+        norm = Normalize(vmin=-0.01, vmax=0.1)
+        cmap1 = cm.Purples
+        cmap2 = cm.Reds
+        recon_cmap = cm.Blues
+        diff_color_mapping1 = cm.ScalarMappable(norm=norm, cmap=cmap1)
+        diff_color_mapping2 = cm.ScalarMappable(norm=norm, cmap=cmap2)
+        recon_color_mapping = cm.ScalarMappable(norm=norm, cmap=recon_cmap)
         
         
-        recon_idx = 0
-        for ref in self.ref:
+        for i, ref in enumerate(self.ref):
             
             ref_aabb = ref.aabb
-            recon_aabb = self.recon[recon_idx].aabb
+        
             
-            current_cell = ref_aabb[:,:2]
+            (x_lower, y_lower), (x_upper, y_upper) = ref_aabb[:,:2]
+            z_ref = ref_aabb[1,2]
+            z_ref_.append(z_ref)
+        
             
-            if np.all(current_cell==recon_aabb[:,:2]):
-                
-                z_ref = ref_aabb[1,2]
-                z_recon = recon_aabb[1,2]
-                z_diff = abs(z_recon - z_ref)
-                
-                z_ref_.append(z_ref)
-                z_recon_.append(z_recon)
-                z_diff_.append(z_diff)
-                
-                if z_diff > 0:
-                    color = color_mapping.to_rgba(z_diff)[:3]
+            condition_x = np.logical_and((pts[:,0] < x_upper), (pts[:,0] > x_lower))
+            condition_y = np.logical_and((pts[:,1] < y_upper), (pts[:,1] > y_lower))
+            candidates = np.where(np.logical_and(condition_x, condition_y))[0]
+            
                     
-                    obj_info = {
-                        "size": [self.grid_size,self.grid_size, z_diff],
-                        "name": "Grid_cell",
-                        "color": color,
-                        "scale": "m"
-                        }
+            if candidates.size:
+                # z_min = pts[candidates, 2].min()
+                z_lower =-0.004
+                z_upper = pts[candidates, 2].max() if pts[candidates, 2].max()>0 else 0
+            
+            else:
+                z_lower = -0.004
+                z_upper = z_lower
+            
+            
+               
+            color = recon_color_mapping.to_rgba(z_upper)[:3]
+            
+            recon_obj_info = {
+                "size": [self.grid_size,self.grid_size, z_upper-z_lower],
+                "name": "Grid_cell",
+                "color": color,
+                "scale": "m"
+                }
+            
+            recon_obj = Object(recon_obj_info)
+            recon_obj.set_corner([ref_aabb[0,0], ref_aabb[0,1], -0.004])
+            recon_obj.create_obj()
+            
+            self.recon.append(recon_obj)
                     
-                    obj = Object(obj_info)
-                    if z_ref<z_recon:
-                        obj.set_corner([ref_aabb[0,0], ref_aabb[0,1], 0])
-                    else:
-                        obj.set_corner([ref_aabb[0,0], ref_aabb[0,1], -z_diff])
-                    obj.create_obj()
-                    
-                    self.diff.append(obj)
-                    
-                recon_idx += 1
+            #########################################################
                 
-            else: 
+            z_diff = z_upper - z_ref
+            # print(z_upper, z_ref)
+            z_diff_.append(z_diff)
+            
+            if z_diff >= 0:
+                color = diff_color_mapping1.to_rgba(abs(z_diff))[:3]
+            
+            elif z_diff < 0: 
+                color = diff_color_mapping2.to_rgba(abs(z_diff))[:3]
                 
-                
-                z_ref = ref_aabb[1,2]
-                z_recon = 0
-                z_diff = abs(z_recon - z_ref)
-                
-                z_ref_.append(z_ref)
-                z_recon_.append(z_recon)
-                z_diff_.append(z_diff)
-                
-                z_diff = ref_aabb[1,2]
-                if z_diff > 0:
-                    color = color_mapping.to_rgba(z_diff)[:3]
+            diff_obj_info = {
+                "size": [self.grid_size,self.grid_size, abs(z_diff)],
+                "name": "Grid_cell",
+                "color": color,
+                "scale": "m"
+                }
+            
+            diff_obj = Object(diff_obj_info)
+            diff_obj.set_corner([ref_aabb[0,0], ref_aabb[0,1], -0.004])
+            diff_obj.create_obj()
         
-                    obj_info = {
-                        "size": [self.grid_size,self.grid_size, z_diff],
-                        "name": "Grid_cell",
-                        "color": color,
-                        "scale": "m"
-                        }
+            self.diff.append(diff_obj)
+            self.diff_heatmap.ravel()[i] = z_diff
+            self.ref_heatmap.ravel()[i] = z_ref
+            self.recon_heatmap.ravel()[i] = z_upper
+        
+        z_diff = np.array(z_diff_)
+        
+                
+        h = self.recon_heatmap.shape[0]
+        w = self.recon_heatmap.shape[1]
+        counter = 0
+        self.check = np.zeros(self.recon_heatmap.shape)
+        for row in range(h):
+            for col in range(w):
+                
+                
+                this = (row,col)
+                up = (row-1,col) 
+                right = (row,col+1)
+                down = (row+1,col)
+                left = (row, col-1)
+                ur = (row-1,col+1)
+                br = (row+1,col+1)
+                bl = (row+1, col-1)
+                bu = (row-1,col-1)
+                
+                
+                idx = [this, up,right,down,left]
+                if self.grid_size<0.707:
+                    idx = [this,up,right,down,left,ur,br,bl,bu]
+                
+                neighbour = False
+                for a in idx:
+                    if neighbour:
+                        continue
+                    r = np.clip(a[0],0,h-1)
+                    c = np.clip(a[1],0,w-1)
+                    diff = self.recon_heatmap[row,col] - self.ref_heatmap[r, c]
+                    if abs(diff) < 0.01:
+                        neighbour = True
+                        
+                if neighbour:
+                    counter += 1
+                    self.check[row,col] = 1
                     
-                    obj = Object(obj_info)
-                    obj.set_corner(ref_aabb[0])
-                    obj.create_obj()
-                    
-                    self.diff.append(obj)
-                    
-        return z_ref_, z_recon_, z_diff_
+        adjusted_error_percentile = counter/len(z_diff)
+        
+        
+        error_percentile = len(z_diff[abs(z_diff)>0.01])/len(z_diff)
+        mean_error = (z_diff/len(z_diff)).mean()
+        missing_percentile = len(z_diff[z_diff<-0.01])/len(z_diff)
+        added_percentile = len(z_diff[z_diff>0.01])/len(z_diff)
+    
+    
+        return adjusted_error_percentile, error_percentile, missing_percentile, added_percentile, mean_error
         
                 
         
-    def visualize(self, model=False, recon=False, ref=False, diff=False):
+    def visualize(self, model=False, recon=False, ref=False, diff=False, cad=False):
         
         vis_list = []
         self.compile_mesh()
@@ -514,6 +575,9 @@ class Worktable():
             
         if diff:
             vis_list.append(self.meshes[3])
+        
+        if cad:
+            vis_list.append(self.meshes[4])
         
         origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.25)
         vis_list.append(origin)
