@@ -256,100 +256,100 @@ n_pts = 300000
 
 ###################################################################33
 
-eval_time = time.time() 
-print("Depth completion evaluation 2")
+# eval_time = time.time() 
+# print("Depth completion evaluation 2")
  
-n_imgs = [16]
-voxel_size = [0]
-grid_size = 0.007
-n_pts = 300000
+# n_imgs = [16]
+# voxel_size = [0]
+# grid_size = 0.007
+# n_pts = 300000
 
 
 
-# paths = [path1]
-# wts =[wt1]
-# names = ["wt1"]
-# n_imgs= [1,2]
-# voxel_size =[0.01,0.02]
-# grid_size = 0.0075
-# n_pts = 250000
+# # paths = [path1]
+# # wts =[wt1]
+# # names = ["wt1"]
+# # n_imgs= [1,2]
+# # voxel_size =[0.01,0.02]
+# # grid_size = 0.0075
+# # n_pts = 250000
 
-cps = [cp5]
+# cps = [cp5]
 
-v_missing = pd.DataFrame(columns=["n_imgs"] + [_.split("/")[5] if _ else "None" for _ in cps ])
+# v_missing = pd.DataFrame(columns=["n_imgs"] + [_.split("/")[5] if _ else "None" for _ in cps ])
 
-v_missing.iloc[:,0] = n_imgs
-v_added = v_missing.copy()
-mcd = v_missing.copy()
-cts  = v_missing.copy()
+# v_missing.iloc[:,0] = n_imgs
+# v_added = v_missing.copy()
+# mcd = v_missing.copy()
+# cts  = v_missing.copy()
 
-for i, (path, stl, wt_dict) in enumerate(zip(paths, stls, wts)):
+# for i, (path, stl, wt_dict) in enumerate(zip(paths, stls, wts)):
     
     
-    out = os.path.join(out_folder, names[i])
-    os.makedirs(out, exist_ok=True)
+#     out = os.path.join(out_folder, names[i])
+#     os.makedirs(out, exist_ok=True)
     
         
-    for cp in cps:
+#     for cp in cps:
             
 
         
-            for ii, n in enumerate(n_imgs):
+#             for ii, n in enumerate(n_imgs):
                     
-                torch.cuda.empty_cache()
+#                 torch.cuda.empty_cache()
             
-                print(f"n_imgs: {n}, cp: {cp}")
+#                 print(f"n_imgs: {n}, cp: {cp}")
     
                     
-                pcl_configs = PCLConfigs(outliers=False, 
-                                          pre_voxel_size=0, 
-                                          voxel_size=0,
-                                          hp_radius=75,
-                                          angle_thresh=75,
-                                          std_ratio_stat=2,
-                                          nb_points_stat=50,
-                                          nb_points_box=6,
-                                          box_radius=2*0,
-                                          registration_method="none",
-                                          filters=True,
-                                          )
+#                 pcl_configs = PCLConfigs(outliers=False, 
+#                                           pre_voxel_size=0, 
+#                                           voxel_size=0,
+#                                           hp_radius=75,
+#                                           angle_thresh=75,
+#                                           std_ratio_stat=2,
+#                                           nb_points_stat=50,
+#                                           nb_points_box=6,
+#                                           box_radius=2*0,
+#                                           registration_method="none",
+#                                           filters=True,
+#                                           )
                 
                 
-                pcl = PointCloud(pcl_configs)
+#                 pcl = PointCloud(pcl_configs)
                 
-                start = time.time()
-                pcd = pcl.create_multi_view_pcl(path, n_images=n, run_s2d=cp, resize=True)
-                t = time.time()-start
+#                 start = time.time()
+#                 pcd = pcl.create_multi_view_pcl(path, n_images=n, run_s2d=cp, resize=True)
+#                 t = time.time()-start
                 
-                if cp:
-                    col = cp.split("/")[5] 
-                else:
-                    col = "None"
+#                 if cp:
+#                     col = cp.split("/")[5] 
+#                 else:
+#                     col = "None"
                     
-                cts.loc[ii, col] = t           
+#                 cts.loc[ii, col] = t           
                 
             
             
-                wt = Worktable()
-                wt.create_model(wt_dict)
+#                 wt = Worktable()
+#                 wt.create_model(wt_dict)
                   
-                wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
-                wt.get_recon_wt(pcd)
+#                 wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
+#                 wt.get_recon_wt(pcd)
                 
-                # print("Evaluating...")
-                v_missing_, v_added_ = wt.evaluate_grids()    
-                cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
+#                 # print("Evaluating...")
+#                 v_missing_, v_added_ = wt.evaluate_grids()    
+#                 cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
                 
                
 
-                v_missing.loc[ii, col] = v_missing_
-                v_added.loc[ii, col] = v_added_
-                mcd.loc[ii, col] = mcd_   
+#                 v_missing.loc[ii, col] = v_missing_
+#                 v_added.loc[ii, col] = v_added_
+#                 mcd.loc[ii, col] = mcd_   
         
-    v_missing.to_csv(os.path.join(out, "df_2_v_missing.csv"), index=False)   
-    v_added.to_csv(os.path.join(out, "df_2_v_added.csv"), index=False)   
-    mcd.to_csv(os.path.join(out, "df_2_mcd.csv"), index=False) 
-    cts.to_csv(os.path.join(out, "df_2_cts.csv"), index=False)    
+#     v_missing.to_csv(os.path.join(out, "df_2_v_missing.csv"), index=False)   
+#     v_added.to_csv(os.path.join(out, "df_2_v_added.csv"), index=False)   
+#     mcd.to_csv(os.path.join(out, "df_2_mcd.csv"), index=False) 
+#     cts.to_csv(os.path.join(out, "df_2_cts.csv"), index=False)    
 
 
 
@@ -360,7 +360,7 @@ for i, (path, stl, wt_dict) in enumerate(zip(paths, stls, wts)):
     
 
 
-print(time.time()-eval_time)
+# print(time.time()-eval_time)
 
 
 
