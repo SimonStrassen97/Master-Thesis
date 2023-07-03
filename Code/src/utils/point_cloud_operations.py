@@ -10,8 +10,9 @@ import copy
 import numpy as np
 import open3d as o3d
 import cv2
-# import torch
+import torch
 import json
+import time
 
 
 from scipy.spatial.transform import Rotation as Rot
@@ -89,8 +90,7 @@ class PointCloud():
             self._loadIntrinsics(path)
             
         dfiles, ifiles, data_files = self._get_file_names(path, n_images)
-        print(dfiles)
-        
+               
         # print(dfiles,ifiles,data_files)
         
         for n, (d, i, dd) in enumerate(zip(dfiles, ifiles, data_files)):
@@ -103,7 +103,7 @@ class PointCloud():
             depth, img, data = self.load_data(d,i,dd)
             K = self.K
         
-            if resize:
+            if resize and not run_s2d:
                 inp = self._prepare_s2d_input(img, depth, K)
                 K_new = inp["K"].squeeze().numpy()
                 img = (inp["rgb"].squeeze().numpy().transpose(1,2,0) * 255).astype(np.uint16)
@@ -163,13 +163,13 @@ class PointCloud():
         
         if self.configs.filters:
             pcl, out1 = self.remove_background(pcl)
-            pcl, out2 = self.remove_hidden_pts(pcl, cam_pose)
-            pcl, out3 = self.remove_infeasable_pts(pcl, cam_pose)
+            # pcl, out2 = self.remove_hidden_pts(pcl, cam_pose)
+            # pcl, out3 = self.remove_infeasable_pts(pcl, cam_pose)
             pcl, out4 = self.remove_outliers(pcl)
             
             
-            outlier_cloud = out1 + out3 + out4
-            outlier_cloud = out1 + out2 + out3 + out4
+            outlier_cloud = out1  + out4
+            # outlier_cloud = out1 + out2 + out3 + out4
 
             self.outliers.append(outlier_cloud)
             
@@ -280,6 +280,8 @@ class PointCloud():
         
         torch.cuda.empty_cache()
         if not self.ml_model:
+            start = time.time()
+            
             checkpoint = torch.load(model_path, map_location="cpu")
             args = checkpoint["args"]
             args.cpu =  True
@@ -287,6 +289,8 @@ class PointCloud():
             self.ml_model.load_state_dict(checkpoint['model'], strict=False) 
             self.ml_model.eval()
             self.ml_model.to("cpu")
+            t = time.time()-start 
+            print(f"loading net: {t}")
 
         
         inp = self._prepare_s2d_input(img, depth, K)
@@ -295,8 +299,12 @@ class PointCloud():
         depth = inp["d"].squeeze().numpy()
         
         with torch.no_grad():
+            # print("prediciting")
+            start = time.time()
             pred = self.ml_model(inp)
-            
+            t = time.time()-start 
+            print(f"inference net: {t}")
+    
         pred = pred.detach().cpu().squeeze().numpy()
         # filled = depth.copy()
         # filled[depth==0] = pred[depth==0

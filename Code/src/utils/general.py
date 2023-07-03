@@ -136,6 +136,8 @@ class PCLConfigs(ConfigBase):
     
     n_images: int = 8
     
+    # resize: bool = False
+    
     
     
 @dataclass
@@ -451,10 +453,12 @@ def loadIntrinsics(path=None):
 def prepare_s2d_input(img, depth, K):
      
      crop_size = (224, 416)
+     # crop_size = (480, 832)
      img, ratio = ResizeWithAspectRatio(img, height=240)
-     # depth_, _ = ResizeWithAspectRatio(depth, height=240)
+     depth_, _ = ResizeWithAspectRatio(depth, height=240)
      depth, K_new = ResizeViaProjection(depth, K, out_size=(240,424))
-     
+   
+     # K_new = K.copy()
      cur_size = img.shape
      diff = (cur_size[0]-crop_size[0], cur_size[1]-crop_size[1])
      K_new[0,2] -= diff[1]/2
@@ -462,11 +466,13 @@ def prepare_s2d_input(img, depth, K):
      
      img = Crop(img, crop_size)
      depth = Crop(depth, crop_size)
+    
      rgb = np.asfarray(img, dtype='float32') / 255
      depth = np.asfarray(depth, dtype="float32")
      depth = np.expand_dims(depth, -1)        
 
      position = AddCoordsNp(224, 416)
+     # position = AddCoordsNp(480, 832)
      position = position.call()
      
      candidates = {"rgb": rgb, "d": depth, "gt": depth, \

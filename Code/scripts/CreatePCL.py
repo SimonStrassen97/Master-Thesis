@@ -30,7 +30,7 @@ from utils.point_cloud_operations2 import PointCloud2
 from utils.camera_operations import StereoCamera
 from utils.worktable_operations import Object, Worktable
 
-
+import time
     
 # import pyransac3d as pyrsc
 
@@ -42,7 +42,10 @@ cp2 = "/home/simonst/github/results/dots_sparsifier/pe_train/model_best.pth.tar"
 cp3 = "/home/simonst/github/results/edge_sparsifier/pe_train/model_best.pth.tar"
 
 # path = "/home/simonst/github/Datasets/wt/raw/20230508_153614"
-path = "/home/simonst/github/Datasets/wt/raw/20230514_164433"
+path1 = "/home/simonst/github/Datasets/wt/raw/20230514_164433" # wt1
+path2 = "/home/simonst/github/Datasets/wt/raw/20230514_173628" # wt2
+path3 = "/home/simonst/github/Datasets/wt/raw/20230522_163051" # wt3
+path = "/home/simonst/github/Datasets/wt/raw/20230522_140447" # wt4.2
 
 # path = "C:/Users/SI042101/ETH/Master_Thesis/Data/PyData/20230417_174256"
 
@@ -50,7 +53,7 @@ path = "/home/simonst/github/Datasets/wt/raw/20230514_164433"
 v = 0.0
 
 pcl_configs = PCLConfigs(outliers=False, 
-                         verbose=True,
+                         verbose=False,
                          pre_voxel_size=v, 
                          voxel_size=v,
                          hp_radius=75,
@@ -66,29 +69,33 @@ pcl_configs = PCLConfigs(outliers=False,
 
 #no
 pcl = PointCloud(pcl_configs)
-pcd = pcl.create_multi_view_pcl(path, n_images=16)
-pcl.visualize(pcd, coord_scale=0.25, outliers=False)
+pcd = pcl.create_multi_view_pcl(path, n_images=24)
+# pcl.visualize(pcd, coord_scale=0.25, outliers=False)
 out_path = os.path.join(path, "orig")
 # if not os.path.exists(out_path):
     # os.makedirs(out_path)
 # pcl.safe_pcl(os.path.join(out_path, "orig.ply"))
 # cv2.imwrite(os.path.join(out_path, "orig.png"), pcl.depths[0])
 
-pcl1 = PointCloud(pcl_configs)
-pcd1 = pcl1.create_multi_view_pcl(path, n_images=5, run_s2d=cp1)
-pcl1.visualize(pcd1, coord_scale=0.25, outliers=False)
-out_path = os.path.join(path, "no_sparsifier")
-# if not os.path.exists(out_path):
+# start = time.time()
+# pcl1 = PointCloud(pcl_configs)
+# pcd1 = pcl1.create_multi_view_pcl(path, n_images=5, run_s2d=cp1)
+# print(f"no_sparsifier took {time.time()-start}")
+# # pcl1.visualize(pcd1, coord_scale=0.25, outliers=False)
+# out_path = os.path.join(path, "no_sparsifier")
+# # if not os.path.exists(out_path):
 #     os.makedirs(out_path)
 # cv2.imwrite(os.path.join(out_path, "no_sparsifier.png"), pcl1.depths[0])
 # pcl1.safe_pcl(os.path.join(out_path, "no_sparsifier.ply"))
 
 
 #dots
-pcl2 = PointCloud(pcl_configs)
-pcd2 = pcl2.create_multi_view_pcl(path, n_images=5, run_s2d=cp2)
-pcl2.visualize(pcd2, coord_scale=0.25, outliers=False)
-out_path = os.path.join(path, "dots_sparsifier")
+# start = time.time()
+# pcl2 = PointCloud(pcl_configs)
+# pcd2 = pcl2.create_multi_view_pcl(path, n_images=1, run_s2d=cp2)
+# print(f"dots_sparsifier took {time.time()-start}")
+# # pcl2.visualize(pcd2, coord_scale=0.25, outliers=False)
+# out_path = os.path.join(path, "dots_sparsifier")
 # if not os.path.exists(out_path):
 #     os.makedirs(out_path)
 # cv2.imwrite(os.path.join(out_path, "dots_sparsifier.png"), pcl2.depths[0])
@@ -96,10 +103,12 @@ out_path = os.path.join(path, "dots_sparsifier")
 
 
 # edge
-pcl3 = PointCloud(pcl_configs)
-pcd3 = pcl3.create_multi_view_pcl(path, n_images=5, run_s2d=cp3)
-pcl3.visualize(pcd3, coord_scale=0.25, outliers=False)
-out_path = os.path.join(path, "edge_sparsifier")
+# start = time.time()
+# pcl3 = PointCloud(pcl_configs)
+# pcd3 = pcl3.create_multi_view_pcl(path, n_images=5, run_s2d=cp3)
+# print(f"edge_sparsifier took {time.time()-start}")
+# # pcl3.visualize(pcd3, coord_scale=0.25, outliers=False)
+# out_path = os.path.join(path, "edge_sparsifier")
 # if not os.path.exists(out_path):
 #     os.makedirs(out_path)
 # cv2.imwrite(os.path.join(out_path, "edge_sparsifier.png"), pcl3.depths[0])
@@ -107,18 +116,37 @@ out_path = os.path.join(path, "edge_sparsifier")
 
 
 
-# pcd.translate([1,0,0])
-# o3d.visualization.draw_geometries([pcl2.unified_pcl, pcd])
+
+# pcl.visualize(pcd, coord_scale=0.25, outliers=False)
+# pcl1.visualize(pcd1, coord_scale=0.25, outliers=False)
+# pcl2.visualize(pcd2, coord_scale=0.25, outliers=False)
+# pcl3.visualize(pcd3, coord_scale=0.25, outliers=False)
+
+
+
+# pcd2.paint_uniform_color([1,0,1])
+
+
+origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.25)
+o3d.visualization.draw_geometries([pcd, origin])
+
+
+
+
 # def custom_draw(pcd):
     
 #     def rotate(vis):
 #         ctr = vis.get_view_control()
-#         ctr.rotate(1,0)
+#         ctr.rotate(1.0,0.0)
 #         return False
     
-#     o3d.visualization.draw_geometries_with_animation_callback([pcd], rotate)
+#     origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.25)
+#     o3d.visualization.draw_geometries_with_animation_callback([pcd,origin], rotate)
 
-# custom_draw(pcl.unified_pcl)
+# custom_draw(pcd)
+# custom_draw(pcd1)
+# custom_draw(pcd2)
+# custom_draw(pcd3)
 
 # p = pcl.unified_pcl
 # pts = np.asarray(p.points)

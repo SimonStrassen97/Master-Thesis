@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Created on Mon May 15 12:53:25 2023
@@ -5,7 +6,7 @@ Created on Mon May 15 12:53:25 2023
 @author: SI042101
 """
 
-import pycolmap
+# import pycolmap
 from pathlib import Path
 
 import os
@@ -25,17 +26,17 @@ from utils.worktable_operations import Worktable
 from utils.WT_configs import wt1, wt2, wt3, wt4
 
 
-# from utils.general import PCLConfigs, OffsetParameters
-# from utils.point_cloud_operations import PointCloud
-# from utils.point_cloud_operations2 import PointCloud2
-# from utils.general import loadIntrinsics
+from utils.general import PCLConfigs, OffsetParameters
+from utils.point_cloud_operations import PointCloud
+from utils.point_cloud_operations2 import PointCloud2
+from utils.general import loadIntrinsics
 from utils.process_colmap_output import process_colmap_pcl
 
 
 import pandas as pd
 
-# import torch
-# torch.cuda.empty_cache()
+import torch
+torch.cuda.empty_cache()
 
 
 
@@ -59,6 +60,7 @@ cp1 = ""
 cp2 = "/home/simonst/github/results/no_sparsifier/pe_train/model_best.pth.tar"
 cp3 = "/home/simonst/github/results/edge_sparsifier/pe_train/model_best.pth.tar"
 cp4 = "/home/simonst/github/results/dots_sparsifier/pe_train/model_best.pth.tar"
+cp5 = "/home/simonst/github/results/pe_train/model_best.pth.tar"
 
 names = ["wt1", "wt2", "wt3", "wt4"]
 cps = [cp1, cp2, cp3, cp4]
@@ -83,89 +85,89 @@ paths_ = [path1_, path2_, path3_, path4_]
 grid_size = 0.007
 n_pts = 300000
           
-for i, (name,path,stl,wt_dict) in enumerate(zip(names,paths_,stls,wts)):
+# for i, (name,path,stl,wt_dict) in enumerate(zip(names,paths_,stls,wts)):
     
     
-    mean_e = pd.DataFrame(columns=["n_imgs"] + ["-"])
+#     mean_e = pd.DataFrame(columns=["n_imgs"] + ["-"])
     
-    mean_e.iloc[:,0] = len(os.listdir(os.path.join(path, "img")))
-    adjusted_e = mean_e.copy()
-    missing_e  = mean_e.copy()
-    added_e  = mean_e.copy()
-    e  = mean_e.copy()
-    mcd  = mean_e.copy()
-    mae1  = mean_e.copy()
-    mse1  = mean_e.copy()
-    rmse1  = mean_e.copy()
-    mae2  = mean_e.copy()
-    mse2  = mean_e.copy()
-    rmse2  = mean_e.copy()
-    cts = mean_e.copy()
+#     mean_e.iloc[:,0] = len(os.listdir(os.path.join(path, "img")))
+#     adjusted_e = mean_e.copy()
+#     missing_e  = mean_e.copy()
+#     added_e  = mean_e.copy()
+#     e  = mean_e.copy()
+#     mcd  = mean_e.copy()
+#     mae1  = mean_e.copy()
+#     mse1  = mean_e.copy()
+#     rmse1  = mean_e.copy()
+#     mae2  = mean_e.copy()
+#     mse2  = mean_e.copy()
+#     rmse2  = mean_e.copy()
+#     cts = mean_e.copy()
     
-    out = os.path.join(out_folder, names[i])
-    colmap_out = Path(os.path.join("/home/simonst/github/pycolmap_out/", name))
-    img_dir = Path(os.path.join(path, "img"))
+#     out = os.path.join(out_folder, names[i])
+#     colmap_out = Path(os.path.join("/home/simonst/github/pycolmap_out/", name))
+#     img_dir = Path(os.path.join(path, "img"))
     
-    if not os.path.exists(colmap_out):
-        colmap_out.mkdir()
+#     if not os.path.exists(colmap_out):
+#         colmap_out.mkdir()
     
-    mvs_path = colmap_out / "mvs"
+#     mvs_path = colmap_out / "mvs"
     
-    database_path = colmap_out / "database.db"
+#     database_path = colmap_out / "database.db"
     
-    start = time.time()
-    pycolmap.extract_features(database_path, img_dir)
-    pycolmap.match_exhaustive(database_path)
-    maps = pycolmap.incremental_mapping(database_path, img_dir, colmap_out)
-    maps[0].write(colmap_out)
-    # dense reconstruction
-    pycolmap.undistort_images(mvs_path, colmap_out, img_dir)
-    pycolmap.patch_match_stereo(mvs_path)  # requires compilation with CUDA
-    pycolmap.stereo_fusion(mvs_path / "dense.ply", mvs_path)
+#     start = time.time()
+#     pycolmap.extract_features(database_path, img_dir)
+#     pycolmap.match_exhaustive(database_path)
+#     maps = pycolmap.incremental_mapping(database_path, img_dir, colmap_out)
+#     maps[0].write(colmap_out)
+#     # dense reconstruction
+#     pycolmap.undistort_images(mvs_path, colmap_out, img_dir)
+#     pycolmap.patch_match_stereo(mvs_path)  # requires compilation with CUDA
+#     pycolmap.stereo_fusion(mvs_path / "dense.ply", mvs_path)
     
-    pcd = process_colmap_pcl(mvs_path, path)
-    t = time.time()-start
+#     pcd = process_colmap_pcl(mvs_path, path)
+#     t = time.time()-start
                     
-    cts.loc[i, "-"] =  t                  
+#     cts.loc[i, "-"] =  t                  
     
-    wt = Worktable()
-    wt.create_model(wt_dict)
+#     wt = Worktable()
+#     wt.create_model(wt_dict)
       
-    wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
-    wt.get_recon_wt(pcd)
+#     wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
+#     wt.get_recon_wt(pcd)
     
-    # print("Evaluating...")
-    adjusted_e_, e_, missing_e_, added_e_, mean_e_ = wt.evaluate_grids()    
-    cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
+#     # print("Evaluating...")
+#     adjusted_e_, e_, missing_e_, added_e_, mean_e_ = wt.evaluate_grids()    
+#     cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
     
    
 
-    mean_e.loc[i, "-"] = mean_e_
-    adjusted_e.loc[i, "-"] = adjusted_e_
-    e.loc[i, "-"] = e_
-    missing_e.loc[i, "-"] = missing_e_
-    added_e.loc[i, "-"] = added_e_
-    mcd.loc[i, "-"] = mcd_            
-    mae1.loc[i, "-"] = recon2ref["mae"]
-    mse1.loc[i, "-"] = recon2ref["mse"]
-    rmse1.loc[i, "-"] = recon2ref["rmse"]
-    mae2.loc[i, "-"] = ref2recon["mae"]
-    mse2.loc[i, "-"] = ref2recon["mse"]
-    rmse2.loc[i, "-"] = ref2recon["rmse"]
+#     mean_e.loc[i, "-"] = mean_e_
+#     adjusted_e.loc[i, "-"] = adjusted_e_
+#     e.loc[i, "-"] = e_
+#     missing_e.loc[i, "-"] = missing_e_
+#     added_e.loc[i, "-"] = added_e_
+#     mcd.loc[i, "-"] = mcd_            
+#     mae1.loc[i, "-"] = recon2ref["mae"]
+#     mse1.loc[i, "-"] = recon2ref["mse"]
+#     rmse1.loc[i, "-"] = recon2ref["rmse"]
+#     mae2.loc[i, "-"] = ref2recon["mae"]
+#     mse2.loc[i, "-"] = ref2recon["mse"]
+#     rmse2.loc[i, "-"] = ref2recon["rmse"]
 
-    mean_e.to_csv(os.path.join(out, "colmap_mean_e.csv"), index=False)    
-    adjusted_e.to_csv(os.path.join(out, "colmap_adjusted_e.csv"), index=False)
-    e.to_csv(os.path.join(out, "colmap_e.csv"), index=False)
-    missing_e.to_csv(os.path.join(out, "colmap_missing_e.csv"), index=False)
-    added_e.to_csv(os.path.join(out, "colmap_added_e.csv"), index=False)
-    mcd.to_csv(os.path.join(out, "colmap_mcd.csv"), index=False)
-    mae1.to_csv(os.path.join(out, "colmap_mae1.csv"), index=False)
-    mse1.to_csv(os.path.join(out, "colmap__mse1.csv"), index=False)
-    rmse1.to_csv(os.path.join(out, "colmap_rmse1.csv"), index=False)
-    mae2.to_csv(os.path.join(out, "colmap_mae2.csv"), index=False)
-    mse2.to_csv(os.path.join(out, "colmap_mse2.csv"), index=False)
-    rmse2.to_csv(os.path.join(out, "colmap_rmse2.csv"), index=False)
-    cts.to_csv(os.path.join(out, "colmap_cts.csv"), index=False)
+#     mean_e.to_csv(os.path.join(out, "colmap_mean_e.csv"), index=False)    
+#     adjusted_e.to_csv(os.path.join(out, "colmap_adjusted_e.csv"), index=False)
+#     e.to_csv(os.path.join(out, "colmap_e.csv"), index=False)
+#     missing_e.to_csv(os.path.join(out, "colmap_missing_e.csv"), index=False)
+#     added_e.to_csv(os.path.join(out, "colmap_added_e.csv"), index=False)
+#     mcd.to_csv(os.path.join(out, "colmap_mcd.csv"), index=False)
+#     mae1.to_csv(os.path.join(out, "colmap_mae1.csv"), index=False)
+#     mse1.to_csv(os.path.join(out, "colmap__mse1.csv"), index=False)
+#     rmse1.to_csv(os.path.join(out, "colmap_rmse1.csv"), index=False)
+#     mae2.to_csv(os.path.join(out, "colmap_mae2.csv"), index=False)
+#     mse2.to_csv(os.path.join(out, "colmap_mse2.csv"), index=False)
+#     rmse2.to_csv(os.path.join(out, "colmap_rmse2.csv"), index=False)
+#     cts.to_csv(os.path.join(out, "colmap_cts.csv"), index=False)
     
 
 
@@ -254,133 +256,111 @@ for i, (name,path,stl,wt_dict) in enumerate(zip(names,paths_,stls,wts)):
 
 ###################################################################33
 
-# eval_time = time.time() 
-# print("Depth completion evaluation 2")
+eval_time = time.time() 
+print("Depth completion evaluation 2")
  
-# n_imgs = [4,8,16,24,32,48]
-# voxel_size = [0]
-# grid_size = 0.007
-# n_pts = 300000
+n_imgs = [16]
+voxel_size = [0]
+grid_size = 0.007
+n_pts = 300000
 
 
 
-# # paths = [path1]
-# # wts =[wt1]
-# # names = ["wt1"]
-# # n_imgs= [1,2]
-# # voxel_size =[0.01,0.02]
-# # grid_size = 0.0075
-# # n_pts = 250000
+# paths = [path1]
+# wts =[wt1]
+# names = ["wt1"]
+# n_imgs= [1,2]
+# voxel_size =[0.01,0.02]
+# grid_size = 0.0075
+# n_pts = 250000
 
-# cps = [cp1]
+cps = [cp5]
 
-# mean_e = pd.DataFrame(columns=["n_imgs"] + [_.split("/")[5] if _ else "None" for _ in cps ])
+v_missing = pd.DataFrame(columns=["n_imgs"] + [_.split("/")[5] if _ else "None" for _ in cps ])
 
-# mean_e.iloc[:,0] = n_imgs
-# adjusted_e = mean_e.copy()
-# missing_e  = mean_e.copy()
-# added_e  = mean_e.copy()
-# e  = mean_e.copy()
-# mcd  = mean_e.copy()
-# mae1  = mean_e.copy()
-# mse1  = mean_e.copy()
-# rmse1  = mean_e.copy()
-# mae2  = mean_e.copy()
-# mse2  = mean_e.copy()
-# rmse2  = mean_e.copy()
-# cts  = mean_e.copy()
+v_missing.iloc[:,0] = n_imgs
+v_added = v_missing.copy()
+mcd = v_missing.copy()
+cts  = v_missing.copy()
 
-# for i, (path, stl, wt_dict) in enumerate(zip(paths, stls, wts)):
+for i, (path, stl, wt_dict) in enumerate(zip(paths, stls, wts)):
     
     
-#     out = os.path.join(out_folder, names[i])
-#     os.makedirs(out, exist_ok=True)
+    out = os.path.join(out_folder, names[i])
+    os.makedirs(out, exist_ok=True)
     
-    
-#     for v in voxel_size:
         
-#         for cp in cps:
+    for cp in cps:
             
 
         
-#             for ii, n in enumerate(n_imgs):
+            for ii, n in enumerate(n_imgs):
                     
-#                 torch.cuda.empty_cache()
+                torch.cuda.empty_cache()
             
-#                 print(f"n_imgs: {n}, cp: {cp}")
+                print(f"n_imgs: {n}, cp: {cp}")
     
                     
-#                 pcl_configs = PCLConfigs(outliers=False, 
-#                                           pre_voxel_size=v, 
-#                                           voxel_size=v,
-#                                           hp_radius=75,
-#                                           angle_thresh=75,
-#                                           std_ratio_stat=2,
-#                                           nb_points_stat=50,
-#                                           nb_points_box=6,
-#                                           box_radius=2*v,
-#                                           registration_method="none",
-#                                           filters=True,
-#                                           )
+                pcl_configs = PCLConfigs(outliers=False, 
+                                          pre_voxel_size=0, 
+                                          voxel_size=0,
+                                          hp_radius=75,
+                                          angle_thresh=75,
+                                          std_ratio_stat=2,
+                                          nb_points_stat=50,
+                                          nb_points_box=6,
+                                          box_radius=2*0,
+                                          registration_method="none",
+                                          filters=True,
+                                          )
                 
                 
-#                 pcl = PointCloud(pcl_configs)
+                pcl = PointCloud(pcl_configs)
                 
-#                 start = time.time()
-#                 pcd = pcl.create_multi_view_pcl(path, n_images=n, run_s2d=cp, resize=True)
-#                 t = time.time()-start
+                start = time.time()
+                pcd = pcl.create_multi_view_pcl(path, n_images=n, run_s2d=cp, resize=True)
+                t = time.time()-start
                 
-#                 if cp:
-#                     col = cp.split("/")[5] 
-#                 else:
-#                     col = "None"
+                if cp:
+                    col = cp.split("/")[5] 
+                else:
+                    col = "None"
                     
-#                 cts.loc[ii, col] = t           
+                cts.loc[ii, col] = t           
                 
             
             
-#                 wt = Worktable()
-#                 wt.create_model(wt_dict)
+                wt = Worktable()
+                wt.create_model(wt_dict)
                   
-#                 wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
-#                 wt.get_recon_wt(pcd)
+                wt.get_ref_wt(path=stl, grid_size=grid_size, n_pts=n_pts)
+                wt.get_recon_wt(pcd)
                 
-#                 # print("Evaluating...")
-#                 adjusted_e_, e_, missing_e_, added_e_, mean_e_ = wt.evaluate_grids()    
-#                 cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
+                # print("Evaluating...")
+                v_missing_, v_added_ = wt.evaluate_grids()    
+                cd_, mcd_, recon2ref, ref2recon =  wt.evaluate_pcl()
                 
                
 
-#                 mean_e.loc[ii, col] = mean_e_
-#                 adjusted_e.loc[ii, col] = adjusted_e_
-#                 e.loc[ii, col] = e_
-#                 missing_e.loc[ii, col] = missing_e_
-#                 added_e.loc[ii, col] = added_e_
-#                 mcd.loc[ii, col] = mcd_            
-#                 mae1.loc[ii, col] = recon2ref["mae"]
-#                 mse1.loc[ii, col] = recon2ref["mse"]
-#                 rmse1.loc[ii, col] = recon2ref["rmse"]
-#                 mae2.loc[ii, col] = ref2recon["mae"]
-#                 mse2.loc[ii, col] = ref2recon["mse"]
-#                 rmse2.loc[ii, col] = ref2recon["rmse"]
+                v_missing.loc[ii, col] = v_missing_
+                v_added.loc[ii, col] = v_added_
+                mcd.loc[ii, col] = mcd_   
         
-#     mean_e.to_csv(os.path.join(out, "resize_mean_e.csv"), index=False)    
-#     adjusted_e.to_csv(os.path.join(out, "resize_adjusted_e.csv"), index=False)
-#     e.to_csv(os.path.join(out, "resize_e.csv"), index=False)
-#     missing_e.to_csv(os.path.join(out, "resize_missing_e.csv"), index=False)
-#     added_e.to_csv(os.path.join(out, "resize_added_e.csv"), index=False)
-#     mcd.to_csv(os.path.join(out, "resize_mcd.csv"), index=False)
-#     mae1.to_csv(os.path.join(out, "resize_mae1.csv"), index=False)
-#     mse1.to_csv(os.path.join(out, "resize_mse1.csv"), index=False)
-#     rmse1.to_csv(os.path.join(out, "resize_rmse1.csv"), index=False)
-#     mae2.to_csv(os.path.join(out, "resize_mae2.csv"), index=False)
-#     mse2.to_csv(os.path.join(out, "resize_mse2.csv"), index=False)
-#     rmse2.to_csv(os.path.join(out, "resize_rmse2.csv"), index=False)
-#     cts.to_csv(os.path.join(out, "resize_cts.csv"), index=False)
+    v_missing.to_csv(os.path.join(out, "df_2_v_missing.csv"), index=False)   
+    v_added.to_csv(os.path.join(out, "df_2_v_added.csv"), index=False)   
+    mcd.to_csv(os.path.join(out, "df_2_mcd.csv"), index=False) 
+    cts.to_csv(os.path.join(out, "df_2_cts.csv"), index=False)    
+
+
+
+
+        
+        
+    
     
 
 
-# print(time.time()-eval_time)
+print(time.time()-eval_time)
 
 
 
@@ -889,7 +869,6 @@ for i, (name,path,stl,wt_dict) in enumerate(zip(names,paths_,stls,wts)):
 #     cts.to_csv(os.path.join(out, "calibration_cts.csv"), index=False)
     
 # print(time.time()-eval_time)
-
 
 
 

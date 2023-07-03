@@ -416,7 +416,7 @@ class Worktable():
             
 
 
-    def evaluate_grids(self):
+    def evaluate_grids(self, vis = False):
         
         
         z_diff_ = []
@@ -462,27 +462,29 @@ class Worktable():
                 z_upper = z_lower
             
             
-               
-            color = recon_color_mapping.to_rgba(z_upper)[:3]
             
-            recon_obj_info = {
-                "size": [self.grid_size,self.grid_size, z_upper-z_lower],
-                "name": "Grid_cell",
-                "color": color,
-                "scale": "m"
-                }
+            if vis:
+                color = recon_color_mapping.to_rgba(z_upper)[:3]
+                
+                recon_obj_info = {
+                    "size": [self.grid_size,self.grid_size, z_upper-z_lower],
+                    "name": "Grid_cell",
+                    "color": color,
+                    "scale": "m"
+                    }
+                
+                recon_obj = Object(recon_obj_info)
+                recon_obj.set_corner([ref_aabb[0,0], ref_aabb[0,1], -0.004])
+                recon_obj.create_obj()
             
-            recon_obj = Object(recon_obj_info)
-            recon_obj.set_corner([ref_aabb[0,0], ref_aabb[0,1], -0.004])
-            recon_obj.create_obj()
-            
-            self.recon.append(recon_obj)
+                self.recon.append(recon_obj)
                     
             #########################################################
                 
             z_diff = z_upper - z_ref
             # print(z_upper, z_ref)
             z_diff_.append(z_diff)
+            z_ref_.append(z_ref)
             
             if z_diff >= 0:
                 color = diff_color_mapping1.to_rgba(abs(z_diff))[:3]
@@ -497,65 +499,72 @@ class Worktable():
                 "scale": "m"
                 }
             
-            diff_obj = Object(diff_obj_info)
-            diff_obj.set_corner([ref_aabb[0,0], ref_aabb[0,1], -0.004])
-            diff_obj.create_obj()
-        
-            self.diff.append(diff_obj)
-            self.diff_heatmap.ravel()[i] = z_diff
-            self.ref_heatmap.ravel()[i] = z_ref
-            self.recon_heatmap.ravel()[i] = z_upper
+            if vis:
+                diff_obj = Object(diff_obj_info)
+                diff_obj.set_corner([ref_aabb[0,0], ref_aabb[0,1], -0.004])
+                diff_obj.create_obj()
+            
+                self.diff.append(diff_obj)
+                self.diff_heatmap.ravel()[i] = z_diff
+                self.ref_heatmap.ravel()[i] = z_ref
+                self.recon_heatmap.ravel()[i] = z_upper
         
         z_diff = np.array(z_diff_)
+        z_ref = np.array(z_ref_)
         
-                
-        h = self.recon_heatmap.shape[0]
-        w = self.recon_heatmap.shape[1]
-        counter = 0
-        self.check = np.zeros(self.recon_heatmap.shape)
-        for row in range(h):
-            for col in range(w):
-                
-                
-                this = (row,col)
-                up = (row-1,col) 
-                right = (row,col+1)
-                down = (row+1,col)
-                left = (row, col-1)
-                ur = (row-1,col+1)
-                br = (row+1,col+1)
-                bl = (row+1, col-1)
-                bu = (row-1,col-1)
-                
-                
-                idx = [this, up,right,down,left]
-                if self.grid_size<0.707:
-                    idx = [this,up,right,down,left,ur,br,bl,bu]
-                
-                neighbour = False
-                for a in idx:
-                    if neighbour:
-                        continue
-                    r = np.clip(a[0],0,h-1)
-                    c = np.clip(a[1],0,w-1)
-                    diff = self.recon_heatmap[row,col] - self.ref_heatmap[r, c]
-                    if abs(diff) < 0.01:
-                        neighbour = True
-                        
-                if neighbour:
-                    counter += 1
-                    self.check[row,col] = 1
+        
+        if vis:
+            h = self.recon_heatmap.shape[0]
+            w = self.recon_heatmap.shape[1]
+            counter = 0
+            self.check = np.zeros(self.recon_heatmap.shape)
+            for row in range(h):
+                for col in range(w):
                     
-        adjusted_error_percentile = counter/len(z_diff)
-        
+                    
+                    this = (row,col)
+                    up = (row-1,col) 
+                    right = (row,col+1)
+                    down = (row+1,col)
+                    left = (row, col-1)
+                    ur = (row-1,col+1)
+                    br = (row+1,col+1)
+                    bl = (row+1, col-1)
+                    bu = (row-1,col-1)
+                    
+                    
+                    idx = [this, up,right,down,left]
+                    if self.grid_size<0.707:
+                        idx = [this,up,right,down,left,ur,br,bl,bu]
+                    
+                    neighbour = False
+                    for a in idx:
+                        if neighbour:
+                            continue
+                        r = np.clip(a[0],0,h-1)
+                        c = np.clip(a[1],0,w-1)
+                        diff = self.recon_heatmap[row,col] - self.ref_heatmap[r, c]
+                        if abs(diff) < 0.01:
+                            neighbour = True
+                            
+                    if neighbour:
+                        counter += 1
+                        self.check[row,col] = 1
+                        
+            adjusted_error_percentile = counter/len(z_diff)
+            
         
         error_percentile = len(z_diff[abs(z_diff)>0.01])/len(z_diff)
         mean_error = (z_diff/len(z_diff)).mean()
         missing_percentile = len(z_diff[z_diff<-0.01])/len(z_diff)
         added_percentile = len(z_diff[z_diff>0.01])/len(z_diff)
+        
+        v_missing = sum(z_diff[z_diff<0])/sum(z_ref)
+        v_added = sum(z_diff[z_diff>0])/sum(z_ref)
+        
+        
     
-    
-        return adjusted_error_percentile, error_percentile, missing_percentile, added_percentile, mean_error
+        return abs(v_missing), abs(v_added)
         
                 
         

@@ -115,11 +115,21 @@ def process_colmap_pcl(colmap_path, data_path):
 
 
 
-# path = os.path.join("/home/simonst/github/pycolmap_out/", "wt1/mvs")
-# data_path = "/home/simonst/github/Datasets/wt/raw/20230514_164433"
+path = os.path.join("/home/simonst/github/pycolmap_out/", "wt1/mvs")
+data_path = "/home/simonst/github/Datasets/wt/raw/20230514_164433"
 
-# pcd = process_colmap_pcl(path, data_path)
-# origin = o3d.geometry.TriangleMesh.create_coordinate_frame()
+
+
+# path1 = "/home/simonst/github/Datasets/wt/raw/20230514_164433" # wt1
+# path2 = "/home/simonst/github/Datasets/wt/raw/20230514_173628" # wt2
+# path3 = "/home/simonst/github/Datasets/wt/raw/20230522_163051" # wt3
+# path4 = "/home/simonst/github/Datasets/wt/raw/20230522_140447" # wt4.2
+
+# pcd = o3d.io.read_point_cloud(os.path.join(path4, "colmap_pcl.ply"))
+
+
+# # pcd = process_colmap_pcl(path, data_path)
+# origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.25)
 # o3d.visualization.draw_geometries([pcd, origin])
   
 
